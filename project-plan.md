@@ -54,7 +54,7 @@ Build a Python MCP (Model Context Protocol) server that provides AI agents with 
 
 ## Implementation Plan
 
-### Phase 1: Foundation (2-3 days) ✅ COMPLETE
+### Phase 1: Foundation ✅ COMPLETE
 1. **Project Setup** ✅
    - Initialize Python project with uv package manager
    - Install MCP Python SDK and HTTP client dependencies
@@ -65,20 +65,20 @@ Build a Python MCP (Model Context Protocol) server that provides AI agents with 
    - Add authentication handling
    - Create base request/response handling
 
-### Phase 2: Core Tools (3-4 days)
-1. **Project Tools**
-   - Implement project CRUD operations
+### Phase 2: Core Tools ✅ COMPLETE
+1. **Project Tools** ✅
+   - Implement project create, read, and update operations
    - Add project listing and filtering
 
-2. **Workspace Tools**
+2. **Workspace Tools** ✅
    - Implement workspace management operations
    - Add workspace state management (lock/unlock)
 
-3. **Run Tools**
+3. **Run Tools** ✅
    - Implement run lifecycle management
    - Add run creation and monitoring
 
-### Phase 3: Resources & Prompts (2 days)
+### Phase 3: Resources & Prompts
 1. **Resource Implementation**
    - Add read-only data access for projects, workspaces, runs
    - Implement proper caching for frequently accessed data
@@ -87,7 +87,38 @@ Build a Python MCP (Model Context Protocol) server that provides AI agents with 
    - Create helpful prompt templates for common operations
    - Add documentation and examples
 
-### Phase 4: Testing & Documentation (2 days)
+3. **Environment Variable Validation**
+ - Check the environment for required variables:
+   - TFC_API_TOKEN
+   - TFC_ORGANIZATION
+ - Catch missing environment variables and authentication errors
+ 
+4. **Pydantic Validation**
+  - Validate API responses with Pydantic models
+  - Ensure all required parameters are present
+
+5. ** Testing**
+  - Update pytests
+
+### Phase 4: API Explorer Integration
+1. **Explorer Tools**
+   - `query_workspaces` - Query workspace data across organization
+   - `query_terraform_versions` - Analyze Terraform version usage
+   - `query_providers` - Explore provider usage across workspaces
+   - `query_modules` - Analyze module usage patterns
+
+2. **Explorer Resources**
+   - `explorer://organization/workspaces` - Organization-wide workspace data
+   - `explorer://organization/providers` - Provider usage analytics
+   - `explorer://organization/modules` - Module usage analytics
+   - `explorer://organization/versions` - Terraform version distribution
+
+3. **Explorer Prompts**
+   - `infrastructure_audit` - Template for comprehensive infrastructure analysis
+   - `version_compliance` - Template for version standardization analysis
+   - `provider_inventory` - Template for provider usage reporting
+
+### Phase 5: Testing & Documentation
 1. **Testing**
    - Unit tests for all tools and resources
    - Integration tests with mock HCP Terraform API
@@ -133,7 +164,7 @@ TFC_BASE_URL=https://app.terraform.io/api/v2
 4. Production-ready error handling
 5. Compatible with Claude Desktop and other MCP clients
 
-## Estimated Timeline: 10-12 days
+## Estimated Timeline:
 This plan provides a production-ready MCP server that enables AI agents to effectively manage HCP Terraform infrastructure through standardized protocols.
 
 ## Implementation Status
@@ -152,10 +183,10 @@ This plan provides a production-ready MCP server that enables AI agents to effec
 - Documentation updates (CLAUDE.md, README.md)
 
 **Files Created:**
-- `src/tfc_mcp/server.py` - MCP server implementation
-- `src/tfc_mcp/client.py` - HCP Terraform API client
-- `src/tfc_mcp/config.py` - Configuration management
-- `src/tfc_mcp/models.py` - Pydantic models for API responses
+- `src/hcp_terraform_mcp/server.py` - MCP server implementation
+- `src/hcp_terraform_mcp/client.py` - HCP Terraform API client
+- `src/hcp_terraform_mcp/config.py` - Configuration management
+- `src/hcp_terraform_mcp/models.py` - Pydantic models for API responses
 - `tests/test_client.py` - Client test suite
 - `tests/test_server.py` - Server test suite
 - `.env.example` - Environment configuration template
@@ -165,8 +196,22 @@ This plan provides a production-ready MCP server that enables AI agents to effec
 - Resource: `terraform://organization/info` - Organization information
 - Prompt: `terraform_status` - Status check template
 
-### 🔄 Next: Phase 2 - Core Tools
-Ready to implement project, workspace, and run management operations.
+### ✅ Phase 2: Core Tools - COMPLETED
+**Completed Features:**
+- **Project Management Tools:** `create_project`, `update_project`, `list_projects`
+- **Workspace Management Tools:** `create_workspace`, `update_workspace`, `list_workspaces`, `lock_workspace`, `unlock_workspace`
+- **Run Management Tools:** `create_run`, `apply_run`, `cancel_run`, `discard_run`, `list_runs`
+- Full API client implementation with all CRUD operations
+- Comprehensive error handling and validation
+- Test coverage for all new functionality (20/22 tests passing)
+
+**Current MCP Capabilities:**
+- Tools: 12 total (1 health + 3 project + 5 workspace + 5 run tools)
+- Resources: `terraform://organization/info` - Organization information
+- Prompts: `terraform_status` - Status check template
+
+### 🔄 Next: Phase 3 - Resources & Prompts
+Ready to implement enhanced data access resources and prompt templates.
 
 ## HCP Terraform API Reference
 
@@ -200,3 +245,9 @@ Ready to implement project, workspace, and run management operations.
 - `POST /runs/:run_id/actions/discard` - Discard run
 - `POST /runs/:run_id/actions/cancel` - Cancel run
 - `POST /runs/:run_id/actions/force-cancel` - Force cancel run
+
+#### Explorer API
+- `GET /api/explorer/v1/organizations/:organization_name/workspaces` - Query workspaces
+- `GET /api/explorer/v1/organizations/:organization_name/terraform-versions` - Query Terraform versions
+- `GET /api/explorer/v1/organizations/:organization_name/providers` - Query providers
+- `GET /api/explorer/v1/organizations/:organization_name/modules` - Query modules

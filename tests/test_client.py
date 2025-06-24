@@ -3,9 +3,9 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tfc_mcp.client import TerraformClient, TerraformApiError, RateLimiter
-from tfc_mcp.config import TerraformConfig
-from tfc_mcp.models import JsonApiResponse, JsonApiResource
+from hcp_terraform_mcp.client import TerraformClient, TerraformApiError, RateLimiter
+from hcp_terraform_mcp.config import TerraformConfig
+from hcp_terraform_mcp.models import JsonApiResponse, JsonApiResource
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def config():
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx.AsyncClient."""
-    with patch("tfc_mcp.client.httpx.AsyncClient") as mock:
+    with patch("hcp_terraform_mcp.client.httpx.AsyncClient") as mock:
         client = AsyncMock()
         mock.return_value = client
         yield client
@@ -155,3 +155,309 @@ class TestTerraformClient:
         
         endpoint = client.get_organization_endpoint("projects")
         assert endpoint == "/organizations/test-org/projects"
+
+
+class TestProjectMethods:
+    """Test project management methods."""
+    
+    @pytest.mark.asyncio
+    async def test_create_project(self, config, mock_httpx_client):
+        """Test project creation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            "data": {
+                "id": "prj-123",
+                "type": "projects",
+                "attributes": {
+                    "name": "test-project",
+                    "description": "Test description"
+                }
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.create_project("test-project", "Test description")
+        
+        assert response.data.id == "prj-123"
+        assert response.data.attributes["name"] == "test-project"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/organizations/test-org/projects" in call_args[1]["url"]
+        assert call_args[1]["json"]["data"]["attributes"]["name"] == "test-project"
+    
+    @pytest.mark.asyncio
+    async def test_update_project(self, config, mock_httpx_client):
+        """Test project update."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "prj-123",
+                "type": "projects",
+                "attributes": {
+                    "name": "updated-project"
+                }
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.update_project("prj-123", name="updated-project")
+        
+        assert response.data.id == "prj-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "PATCH"
+        assert "/projects/prj-123" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_list_projects(self, config, mock_httpx_client):
+        """Test project listing."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": "prj-123",
+                    "type": "projects",
+                    "attributes": {"name": "project-1"}
+                },
+                {
+                    "id": "prj-456",
+                    "type": "projects",
+                    "attributes": {"name": "project-2"}
+                }
+            ]
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.list_projects()
+        
+        assert len(response.data) == 2
+        assert response.data[0].id == "prj-123"
+        assert response.data[1].id == "prj-456"
+    
+    @pytest.mark.asyncio
+    async def test_get_project(self, config, mock_httpx_client):
+        """Test getting a specific project."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "prj-123",
+                "type": "projects",
+                "attributes": {"name": "test-project"}
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.get_project("prj-123")
+        
+        assert response.data.id == "prj-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "GET"
+        assert "/projects/prj-123" in call_args[1]["url"]
+
+
+class TestWorkspaceMethods:
+    """Test workspace management methods."""
+    
+    @pytest.mark.asyncio
+    async def test_create_workspace(self, config, mock_httpx_client):
+        """Test workspace creation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            "data": {
+                "id": "ws-123",
+                "type": "workspaces",
+                "attributes": {
+                    "name": "test-workspace",
+                    "auto-apply": True
+                }
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.create_workspace("test-workspace", auto_apply=True)
+        
+        assert response.data.id == "ws-123"
+        assert response.data.attributes["name"] == "test-workspace"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/organizations/test-org/workspaces" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_lock_workspace(self, config, mock_httpx_client):
+        """Test workspace locking."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "lock-123",
+                "type": "workspace-locks"
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.lock_workspace("ws-123", "Maintenance")
+        
+        assert response.data.id == "lock-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/workspaces/ws-123/actions/lock" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_unlock_workspace(self, config, mock_httpx_client):
+        """Test workspace unlocking."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "ws-123",
+                "type": "workspaces",
+                "attributes": {"locked": False}
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.unlock_workspace("ws-123")
+        
+        assert response.data.id == "ws-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/workspaces/ws-123/actions/unlock" in call_args[1]["url"]
+
+
+class TestRunMethods:
+    """Test run management methods."""
+    
+    @pytest.mark.asyncio
+    async def test_create_run(self, config, mock_httpx_client):
+        """Test run creation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            "data": {
+                "id": "run-123",
+                "type": "runs",
+                "attributes": {
+                    "status": "planning",
+                    "message": "Test run"
+                }
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.create_run("ws-123", "Test run")
+        
+        assert response.data.id == "run-123"
+        assert response.data.attributes["status"] == "planning"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/runs" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_apply_run(self, config, mock_httpx_client):
+        """Test run apply."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "apply-123",
+                "type": "applies"
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.apply_run("run-123", "Apply comment")
+        
+        assert response.data.id == "apply-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/runs/run-123/actions/apply" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_cancel_run(self, config, mock_httpx_client):
+        """Test run cancellation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "id": "run-123",
+                "type": "runs",
+                "attributes": {"status": "canceled"}
+            }
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.cancel_run("run-123")
+        
+        assert response.data.id == "run-123"
+        
+        # Verify the request was made correctly
+        mock_httpx_client.request.assert_called_once()
+        call_args = mock_httpx_client.request.call_args
+        assert call_args[1]["method"] == "POST"
+        assert "/runs/run-123/actions/cancel" in call_args[1]["url"]
+    
+    @pytest.mark.asyncio
+    async def test_list_runs(self, config, mock_httpx_client):
+        """Test run listing."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": "run-123",
+                    "type": "runs",
+                    "attributes": {"status": "applied"}
+                },
+                {
+                    "id": "run-456",
+                    "type": "runs",
+                    "attributes": {"status": "planning"}
+                }
+            ]
+        }
+        mock_httpx_client.request.return_value = mock_response
+        
+        client = TerraformClient(config)
+        response = await client.list_runs(workspace_id="ws-123")
+        
+        assert len(response.data) == 2
+        assert response.data[0].id == "run-123"
+        assert response.data[1].id == "run-456"

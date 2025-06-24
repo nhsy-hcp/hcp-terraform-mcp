@@ -86,3 +86,61 @@ class RunAttributes(BaseModel):
     target_addrs: Optional[List[str]] = None
     created_at: Optional[datetime] = None
     plan_only: Optional[bool] = None
+
+
+# Request models for creating resources
+class CreateProjectRequest(BaseModel):
+    """Request model for creating a project."""
+    name: str
+    description: Optional[str] = None
+
+
+class UpdateProjectRequest(BaseModel):
+    """Request model for updating a project."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CreateWorkspaceRequest(BaseModel):
+    """Request model for creating a workspace."""
+    name: str
+    project_id: Optional[str] = None
+    description: Optional[str] = None
+    auto_apply: Optional[bool] = None
+    execution_mode: Optional[str] = None
+    terraform_version: Optional[str] = None
+    working_directory: Optional[str] = None
+    trigger_prefixes: Optional[List[str]] = None
+
+
+class UpdateWorkspaceRequest(BaseModel):
+    """Request model for updating a workspace."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    auto_apply: Optional[bool] = None
+    execution_mode: Optional[str] = None
+    terraform_version: Optional[str] = None
+    working_directory: Optional[str] = None
+    trigger_prefixes: Optional[List[str]] = None
+
+
+class CreateRunRequest(BaseModel):
+    """Request model for creating a run."""
+    workspace_id: str
+    message: Optional[str] = None
+    is_destroy: Optional[bool] = None
+    refresh: Optional[bool] = None
+    refresh_only: Optional[bool] = None
+    replace_addrs: Optional[List[str]] = None
+    target_addrs: Optional[List[str]] = None
+    plan_only: Optional[bool] = None
+
+
+class LockWorkspaceRequest(BaseModel):
+    """Request model for locking a workspace."""
+    reason: Optional[str] = None
+
+
+class RunActionRequest(BaseModel):
+    """Request model for run actions (apply, cancel, discard)."""
+    comment: Optional[str] = None

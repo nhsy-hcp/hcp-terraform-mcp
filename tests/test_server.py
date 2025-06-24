@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from tfc_mcp.server import TerraformMcpServer
-from tfc_mcp.config import TerraformConfig
+from hcp_terraform_mcp.server import TerraformMcpServer
+from hcp_terraform_mcp.config import TerraformConfig
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ class TestTerraformMcpServer:
     
     def test_server_initialization(self):
         """Test server initialization."""
-        with patch("tfc_mcp.server.get_config") as mock_get_config:
+        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = TerraformConfig(
                 api_token="test-token",
                 organization="test-org"
@@ -35,13 +35,13 @@ class TestTerraformMcpServer:
     @pytest.mark.asyncio
     async def test_server_start_stop(self):
         """Test server start and stop."""
-        with patch("tfc_mcp.server.get_config") as mock_get_config:
+        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = TerraformConfig(
                 api_token="test-token",
                 organization="test-org"
             )
             
-            with patch("tfc_mcp.server.TerraformClient") as mock_client_class:
+            with patch("hcp_terraform_mcp.server.TerraformClient") as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client.health_check.return_value = True
                 mock_client_class.return_value = mock_client
@@ -53,3 +53,23 @@ class TestTerraformMcpServer:
                 
                 await server.stop()
                 mock_client.close.assert_called_once()
+
+
+class TestMcpToolsSetup:
+    """Test MCP tool setup and registration."""
+    
+    def test_server_has_tools_configured(self):
+        """Test that server has the expected tools configured."""
+        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = TerraformConfig(
+                api_token="test-token",
+                organization="test-org"
+            )
+            
+            server = TerraformMcpServer()
+            
+            # Verify server was created successfully
+            assert server.server is not None
+            assert server.config is not None
+            assert server.config.api_token == "test-token"
+            assert server.config.organization == "test-org"

@@ -30,22 +30,22 @@ uv run pytest
 uv run pytest -k "not rate_limiter"
 
 # Run with coverage
-uv run pytest --cov=src/tfc_mcp
+uv run pytest --cov=src/hcp_terraform_mcp
 ```
 
 ### Running the Server
 ```bash
 # Run MCP server
-uv run python -m tfc_mcp
+uv run python -m hcp_terraform_mcp
 
 # Or use the installed script
-uv run tfc-mcp
+uv run hcp-terraform-mcp
 ```
 
 ## Architecture
 
 ### Project Structure
-- `src/tfc_mcp/` - Main package
+- `src/hcp_terraform_mcp/` - Main package
   - `server.py` - MCP server implementation with tool/resource handlers
   - `client.py` - HCP Terraform API client with rate limiting
   - `config.py` - Configuration management via environment variables

@@ -1,3 +1,5 @@
+.env
+
 build/
 plan.out
 plan.out.json

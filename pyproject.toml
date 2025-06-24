@@ -1,5 +1,5 @@
 [project]
-name = "tfc-mcp"
+name = "hcp-terraform-mcp"
 version = "0.1.0"
 description = "HCP Terraform MCP Server - Model Context Protocol server for HCP Terraform APIs"
 readme = "README.md"
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tfc-mcp = "tfc_mcp.__main__:main"
+hcp-terraform-mcp = "hcp_terraform_mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

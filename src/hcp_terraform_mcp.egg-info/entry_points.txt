@@ -1,0 +1,2 @@
+[console_scripts]
+hcp-terraform-mcp = hcp_terraform_mcp.server:main
