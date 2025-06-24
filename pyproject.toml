@@ -1,0 +1,27 @@
+[project]
+name = "tfc-mcp"
+version = "0.1.0"
+description = "HCP Terraform MCP Server - Model Context Protocol server for HCP Terraform APIs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=1.9.4",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+]
+
+[project.scripts]
+tfc-mcp = "tfc_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+]
