@@ -78,27 +78,38 @@ Build a Python MCP (Model Context Protocol) server that provides AI agents with 
    - Implement run lifecycle management
    - Add run creation and monitoring
 
-### Phase 3: Resources & Prompts
-1. **Resource Implementation**
-   - Add read-only data access for projects, workspaces, runs
-   - Implement proper caching for frequently accessed data
+### ✅ Phase 3: Resources & Prompts - COMPLETED
+1. **Resource Implementation** ✅
+   - Added read-only data access for projects, workspaces, runs
+   - Implemented 5-minute TTL caching for frequently accessed data
+   - Enhanced resource URIs: `terraform://project/{id}`, `terraform://workspace/{id}`, `terraform://run/{id}`
 
-2. **Prompt Templates**
-   - Create helpful prompt templates for common operations
-   - Add documentation and examples
+2. **Prompt Templates** ✅
+   - Created 4 helpful prompt templates for common operations
+   - `terraform_deployment` - Plan and execute deployments
+   - `workspace_setup` - Set up new workspaces  
+   - `run_monitoring` - Monitor run status
+   - Enhanced existing `terraform_status` template
 
-3. **Environment Variable Validation**
- - Check the environment for required variables:
-   - TFC_API_TOKEN
-   - TFC_ORGANIZATION
- - Catch missing environment variables and authentication errors
- 
-4. **Pydantic Validation**
-  - Validate API responses with Pydantic models
-  - Ensure all required parameters are present
+3. **Environment Variable Validation** ✅
+   - Added environment validation for required variables (TFC_API_TOKEN, TFC_ORGANIZATION)
+   - Enhanced configuration error handling with clear error messages
+   - Added ConfigurationError exception class
 
-5. ** Testing**
-  - Update pytests
+4. **Pydantic Validation** ✅
+   - Added validation for API responses with Pydantic models
+   - Created ProjectAttributes, WorkspaceAttributes, RunAttributes models
+   - Graceful fallback when validation fails
+
+5. **Testing** ✅
+   - Updated test suite with 14 comprehensive tests (all passing)
+   - Added tests for caching, validation, and error handling
+   - Enhanced test coverage for Phase 3 functionality
+
+6. **MCP Format Compatibility** ✅
+   - Fixed MCP format issues for compatibility with MCP Inspector
+   - Updated return formats for all handlers (list_tools, call_tool, etc.)
+   - Ensured compatibility with MCP Python SDK requirements
 
 ### Phase 4: API Explorer Integration
 1. **Explorer Tools**
@@ -210,8 +221,23 @@ This plan provides a production-ready MCP server that enables AI agents to effec
 - Resources: `terraform://organization/info` - Organization information
 - Prompts: `terraform_status` - Status check template
 
-### 🔄 Next: Phase 3 - Resources & Prompts
-Ready to implement enhanced data access resources and prompt templates.
+### ✅ Phase 3: Resources & Prompts - COMPLETED
+**Completed Features:**
+- **Enhanced Resource Handlers:** Dynamic resource discovery with caching
+- **5-minute TTL Caching:** Improves performance for frequently accessed data
+- **4 Prompt Templates:** Comprehensive templates for common Terraform operations
+- **Environment Validation:** Robust validation with clear error messages
+- **Pydantic Models:** Data validation for API responses with graceful fallback
+- **MCP Format Compatibility:** All handlers now compatible with MCP Inspector
+- **Comprehensive Testing:** 14 tests covering all new functionality
+
+**Current MCP Capabilities:**
+- Tools: 12 total (1 health + 3 project + 5 workspace + 5 run tools)
+- Resources: Dynamic discovery of projects, workspaces, runs + organization info
+- Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
+
+### 🔄 Next: Phase 4 - API Explorer Integration
+Ready to implement advanced analytics and query capabilities.
 
 ## HCP Terraform API Reference
 

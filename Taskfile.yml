@@ -1,0 +1,36 @@
+# https://taskfile.dev
+
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+
+  cc-usage:
+    cmds:
+      - npx ccusage@latest
+    silent: true
+
+  cc-usage-today:
+    cmds:
+      - npx ccusage@latest daily --offline --since {{ .TODAY }}
+    silent: true
+
+    vars:
+      TODAY: '{{ now | date "20060102" }}'
+
+  debug:
+    cmds:
+      - npx @modelcontextprotocol/inspector uv run python -m hcp_terraform_mcp
+    silent: true
+
+  test:
+    cmds:
+      - uv run pytest tests/ -v
+    silent: true
+
+  run:
+    cmds:
+      - uv run python -m hcp_terraform_mcp
+    silent: true
