@@ -89,7 +89,9 @@ class TestCachingMechanism:
         with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
             with patch("hcp_terraform_mcp.server.validate_environment"):
                 mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
+                    api_token="test-token",
+                    organization="test-org",
+                    enable_caching=True,  # Enable caching for this test
                 )
 
                 server = TerraformMcpServer()
@@ -106,7 +108,9 @@ class TestCachingMechanism:
         with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
             with patch("hcp_terraform_mcp.server.validate_environment"):
                 mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
+                    api_token="test-token",
+                    organization="test-org",
+                    enable_caching=True,  # Enable caching for this test
                 )
 
                 server = TerraformMcpServer()
@@ -129,7 +133,9 @@ class TestCachingMechanism:
         with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
             with patch("hcp_terraform_mcp.server.validate_environment"):
                 mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
+                    api_token="test-token",
+                    organization="test-org",
+                    enable_caching=True,  # Enable caching for this test
                 )
 
                 server = TerraformMcpServer()
@@ -148,6 +154,21 @@ class TestCachingMechanism:
                 # Verify cache is empty
                 assert server._get_from_cache("key1") is None
                 assert server._get_from_cache("key2") is None
+
+    def test_caching_disabled_by_default(self):
+        """Test that caching is disabled by default."""
+        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
+            with patch("hcp_terraform_mcp.server.validate_environment"):
+                mock_get_config.return_value = TerraformConfig(
+                    api_token="test-token",
+                    organization="test-org",
+                    # enable_caching not set, should default to False
+                )
+
+                server = TerraformMcpServer()
+
+                # Verify caching is disabled
+                assert server.config.enable_caching is False
 
 
 class TestEnvironmentValidation:

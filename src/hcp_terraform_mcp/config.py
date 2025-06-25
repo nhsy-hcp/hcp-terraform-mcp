@@ -24,6 +24,12 @@ class TerraformConfig(BaseSettings):
         default="https://app.terraform.io/api/v2",
         description="Base URL for HCP Terraform API",
     )
+    enable_caching: bool = Field(
+        default=False, description="Enable resource caching (default: False)"
+    )
+    debug_mode: bool = Field(
+        default=False, description="Enable debug logging (default: False)"
+    )
 
 
 def get_config() -> TerraformConfig:
@@ -62,4 +68,6 @@ def get_config_summary() -> dict:
         "base_url": config.base_url,
         "api_token_set": bool(config.api_token),
         "api_token_length": len(config.api_token) if config.api_token else 0,
+        "enable_caching": config.enable_caching,
+        "debug_mode": config.debug_mode,
     }

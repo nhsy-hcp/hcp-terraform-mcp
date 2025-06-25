@@ -65,7 +65,7 @@ uv run hcp-terraform-mcp
 
 3. **Configuration** - Environment-based config management
    - Required: TFC_API_TOKEN, TFC_ORGANIZATION
-   - Optional: TFC_BASE_URL
+   - Optional: TFC_BASE_URL, TFC_ENABLE_CACHING, TFC_DEBUG_MODE
 
 ## Current Implementation Status
 
@@ -77,17 +77,33 @@ uv run hcp-terraform-mcp
 - Test suite with mocking
 - Environment-based configuration
 
-**Current MCP Capabilities:**
-- Tools: `health_check` - API connectivity test
-- Resources: `terraform://organization/info` - Organization details
-- Prompts: `terraform_status` - Status check template
-
-## Next Development Phase
-
-Phase 2 will implement core Terraform operations:
+**Phase 2 Complete** ✅
 - Project management (CRUD operations)
 - Workspace management (create, update, lock/unlock)
 - Run management (create, apply, cancel runs)
-- Enhanced resources and prompts
+- Full API client implementation
+- Comprehensive error handling and validation
+
+**Phase 3 Complete** ✅
+- Enhanced resource handlers with dynamic discovery
+- 5-minute TTL caching for performance
+- 4 comprehensive prompt templates
+- Environment validation with clear error messages
+- Pydantic models for API response validation
+- MCP format compatibility fixes
+- MCP Inspector compatibility
+- Comprehensive testing (32 tests passing)
+
+**Current MCP Capabilities:**
+- Tools: 12 total (1 health + 3 project + 5 workspace + 5 run tools)
+- Resources: Dynamic discovery of projects, workspaces, runs + organization info
+- Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
+
+## Next Development Phase
+
+Phase 4 will implement API Explorer Integration:
+- Advanced analytics and query capabilities
+- Organization-wide data exploration
+- Infrastructure audit and compliance tools
 
 See `project-plan.md` for complete roadmap.

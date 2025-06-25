@@ -41,7 +41,32 @@ class TerraformMcpServer:
         self.server = Server("hcp-terraform-mcp")
         self._cache = {}
         self._cache_ttl = 300  # 5 minutes TTL
+
+        # Configure debug logging if enabled
+        if self.config.debug_mode:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled for HCP Terraform MCP Server")
+            logger.debug(f"Configuration: {self._get_safe_config_for_logging()}")
+
         self._setup_handlers()
+
+    def _get_safe_config_for_logging(self) -> dict:
+        """Get configuration with sensitive data obfuscated for logging."""
+        config_dict = self.config.model_dump()
+
+        # Obfuscate the API token
+        if config_dict.get("api_token"):
+            token = config_dict["api_token"]
+            if len(token) > 8:
+                # Show first 4 and last 4 characters with asterisks in between
+                config_dict["api_token"] = (
+                    f"{token[:4]}{'*' * (len(token) - 8)}{token[-4:]}"
+                )
+            else:
+                # For shorter tokens, just show asterisks
+                config_dict["api_token"] = "*" * len(token)
+
+        return config_dict
 
     def _setup_handlers(self):
         """Setup MCP server handlers."""
@@ -49,6 +74,8 @@ class TerraformMcpServer:
         @self.server.list_tools()
         async def list_tools():
             """List available tools."""
+            if self.config.debug_mode:
+                logger.debug("Listing available tools")
             return [
                 Tool(
                     name="health_check",
@@ -360,6 +387,9 @@ class TerraformMcpServer:
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]):
             """Call a tool."""
+            if self.config.debug_mode:
+                logger.debug(f"Calling tool: {name} with arguments: {arguments}")
+
             if not self.client:
                 return [
                     TextContent(
@@ -728,6 +758,9 @@ class TerraformMcpServer:
         @self.server.list_resources()
         async def list_resources():
             """List available resources."""
+            if self.config.debug_mode:
+                logger.debug("Listing available resources")
+
             resources = [
                 Resource(
                     uri="terraform://organization/info",
@@ -803,35 +836,52 @@ class TerraformMcpServer:
         @self.server.read_resource()
         async def read_resource(uri: str):
             """Read a resource."""
+            # Convert AnyUrl to string for string operations
+            uri_str = str(uri)
+
+            if self.config.debug_mode:
+                logger.debug(f"Reading resource: {uri_str}")
+
             if not self.client:
-                return {
-                    "contents": [
-                        TextResourceContents(
-                            uri=uri,
-                            text="Error: Terraform client not initialized",
-                            mimeType="text/plain",
-                        )
-                    ]
-                }
+                return [
+                    TextResourceContents(
+                        uri=uri,
+                        text="Error: Terraform client not initialized",
+                        mimeType="text/plain",
+                    )
+                ]
 
             try:
-                # Check cache first
-                cache_key = f"resource_{uri}"
-                cached_data = self._get_from_cache(cache_key)
-                if cached_data:
-                    return {
-                        "contents": [
+                # Check cache first (if enabled)
+                if self.config.enable_caching:
+                    cache_key = f"resource_{uri_str}"
+                    cached_data = self._get_from_cache(cache_key)
+                    if cached_data:
+                        if self.config.debug_mode:
+                            logger.debug(f"Cache hit for resource: {uri_str}")
+                        return [
                             TextResourceContents(
                                 uri=uri, text=cached_data, mimeType="application/json"
                             )
                         ]
-                    }
+                    elif self.config.debug_mode:
+                        logger.debug(f"Cache miss for resource: {uri_str}")
 
-                if uri == "terraform://organization/info":
+                if uri_str == "terraform://organization/info":
                     # Get organization info
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Fetching organization info from: {self.client.get_organization_endpoint()}"
+                        )
+
                     response = await self.client.get(
                         self.client.get_organization_endpoint()
                     )
+
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Organization API response received: {bool(response.data)}"
+                        )
 
                     if response.data:
                         org_info = {
@@ -842,35 +892,63 @@ class TerraformMcpServer:
                         }
 
                         org_info_json = json.dumps(org_info, indent=2)
-                        self._set_cache(cache_key, org_info_json)
 
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=org_info_json,
-                                    mimeType="application/json",
-                                )
-                            ]
-                        }
+                        if self.config.debug_mode:
+                            logger.debug(
+                                f"Generated organization info JSON: {len(org_info_json)} chars"
+                            )
+
+                        if self.config.enable_caching:
+                            cache_key = f"resource_{uri_str}"
+                            self._set_cache(cache_key, org_info_json)
+
+                        if self.config.debug_mode:
+                            logger.debug(
+                                f"Returning organization resource with MIME type: application/json"
+                            )
+                            logger.debug(
+                                f"TextResourceContents JSON for organization information: {org_info_json}"
+                            )
+
+                        return [
+                            TextResourceContents(
+                                uri=uri, text=org_info_json, mimeType="application/json"
+                            )
+                        ]
                     else:
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text="No organization data found",
-                                    mimeType="text/plain",
-                                )
-                            ]
-                        }
+                        if self.config.debug_mode:
+                            logger.debug("No organization data received from API")
 
-                elif uri.startswith("terraform://project/"):
-                    project_id = uri.split("/")[-1]
+                        return [
+                            TextResourceContents(
+                                uri=uri,
+                                text="No organization data found",
+                                mimeType="text/plain",
+                            )
+                        ]
+
+                elif uri_str.startswith("terraform://project/"):
+                    project_id = uri_str.split("/")[-1]
+
+                    if self.config.debug_mode:
+                        logger.debug(f"Extracting project ID from URI: {project_id}")
+                        logger.debug(f"Fetching project data for ID: {project_id}")
+
                     response = await self.client.get_project(project_id)
+
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Project API response received: {bool(response.data)}"
+                        )
 
                     if response.data:
                         # Validate with Pydantic model
                         try:
+                            if self.config.debug_mode:
+                                logger.debug(
+                                    f"Validating project attributes with Pydantic model"
+                                )
+
                             project_attrs = ProjectAttributes(
                                 **response.data.attributes
                             )
@@ -880,8 +958,18 @@ class TerraformMcpServer:
                                 "attributes": project_attrs.model_dump(),
                                 "retrieved_at": time.time(),
                             }
+
+                            if self.config.debug_mode:
+                                logger.debug(
+                                    f"Project validation successful for ID: {response.data.id}"
+                                )
                         except Exception as e:
                             logger.warning(f"Project validation failed: {e}")
+                            if self.config.debug_mode:
+                                logger.debug(
+                                    f"Using raw project attributes due to validation failure"
+                                )
+
                             project_data = {
                                 "id": response.data.id,
                                 "type": response.data.type,
@@ -891,31 +979,57 @@ class TerraformMcpServer:
                             }
 
                         project_json = json.dumps(project_data, indent=2, default=str)
-                        self._set_cache(cache_key, project_json)
 
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=project_json,
-                                    mimeType="application/json",
-                                )
-                            ]
-                        }
+                        if self.config.debug_mode:
+                            logger.debug(
+                                f"Generated project JSON: {len(project_json)} chars"
+                            )
+
+                        if self.config.enable_caching:
+                            cache_key = f"resource_{uri_str}"
+                            self._set_cache(cache_key, project_json)
+
+                        if self.config.debug_mode:
+                            logger.debug(
+                                f"Returning project resource for ID: {response.data.id}"
+                            )
+
+                        return [
+                            TextResourceContents(
+                                uri=uri,
+                                text=project_json,
+                                mimeType="application/json",
+                            )
+                        ]
                     else:
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=f"Project {project_id} not found",
-                                    mimeType="text/plain",
-                                )
-                            ]
-                        }
+                        if self.config.debug_mode:
+                            logger.debug(
+                                f"No project data received for ID: {project_id}"
+                            )
 
-                elif uri.startswith("terraform://workspace/"):
-                    workspace_id = uri.split("/")[-1]
+                        return [
+                            TextResourceContents(
+                                uri=uri,
+                                text=f"Project {project_id} not found",
+                                mimeType="text/plain",
+                            )
+                        ]
+
+                elif uri_str.startswith("terraform://workspace/"):
+                    workspace_id = uri_str.split("/")[-1]
+
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Extracting workspace ID from URI: {workspace_id}"
+                        )
+                        logger.debug(f"Fetching workspace data for ID: {workspace_id}")
+
                     response = await self.client.get_workspace(workspace_id)
+
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Workspace API response received: {bool(response.data)}"
+                        )
 
                     if response.data:
                         # Validate with Pydantic model
@@ -942,31 +1056,39 @@ class TerraformMcpServer:
                         workspace_json = json.dumps(
                             workspace_data, indent=2, default=str
                         )
-                        self._set_cache(cache_key, workspace_json)
+                        if self.config.enable_caching:
+                            cache_key = f"resource_{uri_str}"
+                            self._set_cache(cache_key, workspace_json)
 
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=workspace_json,
-                                    mimeType="application/json",
-                                )
-                            ]
-                        }
+                        return [
+                            TextResourceContents(
+                                uri=uri,
+                                text=workspace_json,
+                                mimeType="application/json",
+                            )
+                        ]
                     else:
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=f"Workspace {workspace_id} not found",
-                                    mimeType="text/plain",
-                                )
-                            ]
-                        }
+                        return [
+                            TextResourceContents(
+                                uri=uri,
+                                text=f"Workspace {workspace_id} not found",
+                                mimeType="text/plain",
+                            )
+                        ]
 
-                elif uri.startswith("terraform://run/"):
-                    run_id = uri.split("/")[-1]
+                elif uri_str.startswith("terraform://run/"):
+                    run_id = uri_str.split("/")[-1]
+
+                    if self.config.debug_mode:
+                        logger.debug(f"Extracting run ID from URI: {run_id}")
+                        logger.debug(f"Fetching run data for ID: {run_id}")
+
                     response = await self.client.get_run(run_id)
+
+                    if self.config.debug_mode:
+                        logger.debug(
+                            f"Run API response received: {bool(response.data)}"
+                        )
 
                     if response.data:
                         # Validate with Pydantic model
@@ -989,55 +1111,56 @@ class TerraformMcpServer:
                             }
 
                         run_json = json.dumps(run_data, indent=2, default=str)
-                        self._set_cache(cache_key, run_json)
+                        if self.config.enable_caching:
+                            cache_key = f"resource_{uri_str}"
+                            self._set_cache(cache_key, run_json)
 
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri, text=run_json, mimeType="application/json"
-                                )
-                            ]
-                        }
+                        return [
+                            TextResourceContents(
+                                uri=uri, text=run_json, mimeType="application/json"
+                            )
+                        ]
                     else:
-                        return {
-                            "contents": [
-                                TextResourceContents(
-                                    uri=uri,
-                                    text=f"Run {run_id} not found",
-                                    mimeType="text/plain",
-                                )
-                            ]
-                        }
-                else:
-                    return {
-                        "contents": [
+                        return [
                             TextResourceContents(
                                 uri=uri,
-                                text=f"Unknown resource: {uri}",
+                                text=f"Run {run_id} not found",
                                 mimeType="text/plain",
                             )
                         ]
-                    }
+                else:
+                    if self.config.debug_mode:
+                        logger.debug(f"Unknown resource type requested: {uri_str}")
 
-            except TerraformApiError as e:
-                return {
-                    "contents": [
-                        TextResourceContents(
-                            uri=uri, text=f"API Error: {str(e)}", mimeType="text/plain"
-                        )
-                    ]
-                }
-            except Exception as e:
-                logger.exception("Unexpected error in resource read")
-                return {
-                    "contents": [
+                    return [
                         TextResourceContents(
                             uri=uri,
-                            text=f"Unexpected error: {str(e)}",
+                            text=f"Unknown resource: {uri}",
                             mimeType="text/plain",
                         )
                     ]
-                }
+
+            except TerraformApiError as e:
+                if self.config.debug_mode:
+                    logger.debug(f"TerraformApiError for resource {uri_str}: {str(e)}")
+
+                return [
+                    TextResourceContents(
+                        uri=uri, text=f"API Error: {str(e)}", mimeType="text/plain"
+                    )
+                ]
+            except Exception as e:
+                logger.exception("Unexpected error in resource read")
+                if self.config.debug_mode:
+                    logger.debug(f"Unexpected error for resource {uri_str}: {str(e)}")
+
+                return [
+                    TextResourceContents(
+                        uri=uri,
+                        text=f"Unexpected error: {str(e)}",
+                        mimeType="text/plain",
+                    )
+                ]
 
         @self.server.list_prompts()
         async def list_prompts():
@@ -1242,9 +1365,17 @@ Focus on the most critical issues and provide actionable insights."""
             self.client = TerraformClient(self.config)
             logger.info("Starting HCP Terraform MCP Server")
 
+            if self.config.debug_mode:
+                logger.debug(
+                    f"Server configuration: {self._get_safe_config_for_logging()}"
+                )
+                logger.debug(f"Cache TTL: {self._cache_ttl} seconds")
+
             # Test connection
             if await self.client.health_check():
                 logger.info("Successfully connected to HCP Terraform API")
+                if self.config.debug_mode:
+                    logger.debug(f"Connected to: {self.config.base_url}")
             else:
                 logger.warning("Failed to connect to HCP Terraform API")
 
@@ -1263,14 +1394,24 @@ Focus on the most critical issues and provide actionable insights."""
         if key in self._cache:
             data, timestamp = self._cache[key]
             if time.time() - timestamp < self._cache_ttl:
+                if self.config.debug_mode:
+                    logger.debug(
+                        f"Cache hit: {key} (age: {time.time() - timestamp:.1f}s)"
+                    )
                 return data
             else:
                 # Remove expired cache entry
+                if self.config.debug_mode:
+                    logger.debug(
+                        f"Cache expired: {key} (age: {time.time() - timestamp:.1f}s)"
+                    )
                 del self._cache[key]
         return None
 
     def _set_cache(self, key: str, data: str) -> None:
         """Set cache data with current timestamp."""
+        if self.config.debug_mode:
+            logger.debug(f"Cache set: {key} (size: {len(data)} chars)")
         self._cache[key] = (data, time.time())
 
     def _clear_cache(self) -> None:
@@ -1299,7 +1440,13 @@ Focus on the most critical issues and provide actionable insights."""
 
 def main():
     """Main entry point."""
-    logging.basicConfig(level=logging.INFO)
+    # Initialize basic logging first
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    # Create server (which will configure debug logging if enabled)
     server = TerraformMcpServer()
     server.run()
 
