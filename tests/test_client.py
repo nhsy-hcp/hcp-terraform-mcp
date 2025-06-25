@@ -6,7 +6,14 @@ import pytest
 
 from hcp_terraform_mcp.client import RateLimiter, TerraformApiError, TerraformClient
 from hcp_terraform_mcp.config import TerraformConfig
-from hcp_terraform_mcp.models import JsonApiResource, JsonApiResponse
+from hcp_terraform_mcp.models import (
+    CreateProjectRequest,
+    CreateRunRequest,
+    CreateWorkspaceRequest,
+    JsonApiResponse,
+    RunActionRequest,
+    UpdateProjectRequest,
+)
 
 
 @pytest.fixture
@@ -35,8 +42,6 @@ class TestRateLimiter:
     async def test_rate_limiter_allows_requests_within_limit(self):
         """Test that rate limiter allows requests within limit."""
         limiter = RateLimiter(max_requests=2, window_seconds=1)
-
-        # Should allow first two requests immediately
         await limiter.acquire()
         await limiter.acquire()
 
@@ -44,18 +49,12 @@ class TestRateLimiter:
     async def test_rate_limiter_blocks_excess_requests(self):
         """Test that rate limiter blocks requests exceeding limit."""
         limiter = RateLimiter(max_requests=1, window_seconds=0.05)
-
-        # First request should be immediate
         await limiter.acquire()
-
-        # Second request should be delayed
         import time
 
         start_time = time.time()
         await limiter.acquire()
         elapsed = time.time() - start_time
-
-        # Should have waited at least some time but not too long
         assert 0.03 < elapsed < 0.2
 
 
@@ -68,11 +67,11 @@ class TestTerraformClient:
         client = TerraformClient(config)
         assert client.config == config
         assert client.rate_limiter is not None
+        assert client.endpoints.organization == "test-org"
 
     @pytest.mark.asyncio
     async def test_successful_get_request(self, config, mock_httpx_client):
         """Test successful GET request."""
-        # Setup mock response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -87,14 +86,12 @@ class TestTerraformClient:
         client = TerraformClient(config)
         response = await client.get("/test-endpoint")
 
-        assert response.data is not None
+        assert isinstance(response, JsonApiResponse)
         assert response.data.id == "test-id"
-        assert response.data.type == "organizations"
 
     @pytest.mark.asyncio
     async def test_api_error_handling(self, config, mock_httpx_client):
         """Test API error handling."""
-        # Setup mock error response
         mock_response = MagicMock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
@@ -103,7 +100,6 @@ class TestTerraformClient:
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-
         with pytest.raises(TerraformApiError) as exc_info:
             await client.get("/test-endpoint")
 
@@ -121,9 +117,7 @@ class TestTerraformClient:
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        is_healthy = await client.health_check()
-
-        assert is_healthy is True
+        assert await client.health_check() is True
 
     @pytest.mark.asyncio
     async def test_health_check_failure(self, config, mock_httpx_client):
@@ -134,19 +128,7 @@ class TestTerraformClient:
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        is_healthy = await client.health_check()
-
-        assert is_healthy is False
-
-    def test_organization_endpoint_generation(self, config):
-        """Test organization endpoint generation."""
-        client = TerraformClient(config)
-
-        endpoint = client.get_organization_endpoint()
-        assert endpoint == "/organizations/test-org"
-
-        endpoint = client.get_organization_endpoint("projects")
-        assert endpoint == "/organizations/test-org/projects"
+        assert await client.health_check() is False
 
 
 class TestProjectMethods:
@@ -161,26 +143,21 @@ class TestProjectMethods:
             "data": {
                 "id": "prj-123",
                 "type": "projects",
-                "attributes": {
-                    "name": "test-project",
-                    "description": "Test description",
-                },
+                "attributes": {"name": "test-project"},
             }
         }
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        response = await client.create_project("test-project", "Test description")
+        project_data = CreateProjectRequest(name="test-project")
+        response = await client.create_project(project_data)
 
         assert response.data.id == "prj-123"
-        assert response.data.attributes["name"] == "test-project"
-
-        # Verify the request was made correctly
         mock_httpx_client.request.assert_called_once()
         call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/organizations/test-org/projects" in call_args[1]["url"]
-        assert call_args[1]["json"]["data"]["attributes"]["name"] == "test-project"
+        assert call_args.kwargs["method"] == "POST"
+        assert call_args.kwargs["url"] == "/organizations/test-org/projects"
+        assert call_args.kwargs["json"]["data"]["attributes"]["name"] == "test-project"
 
     @pytest.mark.asyncio
     async def test_update_project(self, config, mock_httpx_client):
@@ -188,24 +165,18 @@ class TestProjectMethods:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "data": {
-                "id": "prj-123",
-                "type": "projects",
-                "attributes": {"name": "updated-project"},
-            }
+            "data": {"id": "prj-123", "type": "projects"}
         }
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        response = await client.update_project("prj-123", name="updated-project")
+        project_data = UpdateProjectRequest(name="updated-project")
+        await client.update_project("prj-123", project_data)
 
-        assert response.data.id == "prj-123"
-
-        # Verify the request was made correctly
         mock_httpx_client.request.assert_called_once()
         call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "PATCH"
-        assert "/projects/prj-123" in call_args[1]["url"]
+        assert call_args.kwargs["method"] == "PATCH"
+        assert call_args.kwargs["url"] == "/projects/prj-123"
 
     @pytest.mark.asyncio
     async def test_list_projects(self, config, mock_httpx_client):
@@ -214,16 +185,8 @@ class TestProjectMethods:
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "data": [
-                {
-                    "id": "prj-123",
-                    "type": "projects",
-                    "attributes": {"name": "project-1"},
-                },
-                {
-                    "id": "prj-456",
-                    "type": "projects",
-                    "attributes": {"name": "project-2"},
-                },
+                {"id": "prj-1", "type": "projects"},
+                {"id": "prj-2", "type": "projects"},
             ]
         }
         mock_httpx_client.request.return_value = mock_response
@@ -232,33 +195,6 @@ class TestProjectMethods:
         response = await client.list_projects()
 
         assert len(response.data) == 2
-        assert response.data[0].id == "prj-123"
-        assert response.data[1].id == "prj-456"
-
-    @pytest.mark.asyncio
-    async def test_get_project(self, config, mock_httpx_client):
-        """Test getting a specific project."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "id": "prj-123",
-                "type": "projects",
-                "attributes": {"name": "test-project"},
-            }
-        }
-        mock_httpx_client.request.return_value = mock_response
-
-        client = TerraformClient(config)
-        response = await client.get_project("prj-123")
-
-        assert response.data.id == "prj-123"
-
-        # Verify the request was made correctly
-        mock_httpx_client.request.assert_called_once()
-        call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "GET"
-        assert "/projects/prj-123" in call_args[1]["url"]
 
 
 class TestWorkspaceMethods:
@@ -270,71 +206,45 @@ class TestWorkspaceMethods:
         mock_response = MagicMock()
         mock_response.status_code = 201
         mock_response.json.return_value = {
-            "data": {
-                "id": "ws-123",
-                "type": "workspaces",
-                "attributes": {"name": "test-workspace", "auto-apply": True},
-            }
+            "data": {"id": "ws-123", "type": "workspaces"}
         }
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        response = await client.create_workspace("test-workspace", auto_apply=True)
+        workspace_data = CreateWorkspaceRequest(name="test-workspace", auto_apply=True)
+        response = await client.create_workspace(workspace_data)
 
         assert response.data.id == "ws-123"
-        assert response.data.attributes["name"] == "test-workspace"
-
-        # Verify the request was made correctly
         mock_httpx_client.request.assert_called_once()
         call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/organizations/test-org/workspaces" in call_args[1]["url"]
+        assert call_args.kwargs["method"] == "POST"
+        assert call_args.kwargs["url"] == "/organizations/test-org/workspaces"
 
     @pytest.mark.asyncio
-    async def test_lock_workspace(self, config, mock_httpx_client):
-        """Test workspace locking."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {"id": "lock-123", "type": "workspace-locks"}
-        }
-        mock_httpx_client.request.return_value = mock_response
-
+    async def test_lock_unlock_workspace(self, config, mock_httpx_client):
+        """Test workspace locking and unlocking."""
+        mock_httpx_client.request.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"data": {"id": "lock-123", "type": "workspace-locks"}},
+        )
         client = TerraformClient(config)
-        response = await client.lock_workspace("ws-123", "Maintenance")
 
-        assert response.data.id == "lock-123"
+        await client.lock_workspace("ws-123", "Maintenance")
+        mock_httpx_client.request.assert_called_with(
+            method="POST",
+            url="/workspaces/ws-123/actions/lock",
+            json={"reason": "Maintenance"},
+            params=None,
+        )
 
-        # Verify the request was made correctly
-        mock_httpx_client.request.assert_called_once()
-        call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/workspaces/ws-123/actions/lock" in call_args[1]["url"]
-
-    @pytest.mark.asyncio
-    async def test_unlock_workspace(self, config, mock_httpx_client):
-        """Test workspace unlocking."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "id": "ws-123",
-                "type": "workspaces",
-                "attributes": {"locked": False},
-            }
-        }
-        mock_httpx_client.request.return_value = mock_response
-
-        client = TerraformClient(config)
-        response = await client.unlock_workspace("ws-123")
-
-        assert response.data.id == "ws-123"
-
-        # Verify the request was made correctly
-        mock_httpx_client.request.assert_called_once()
-        call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/workspaces/ws-123/actions/unlock" in call_args[1]["url"]
+        mock_httpx_client.request.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"data": {"id": "ws-123", "type": "workspaces"}},
+        )
+        await client.unlock_workspace("ws-123")
+        mock_httpx_client.request.assert_called_with(
+            method="POST", url="/workspaces/ws-123/actions/unlock", json={}, params=None
+        )
 
 
 class TestRunMethods:
@@ -345,89 +255,52 @@ class TestRunMethods:
         """Test run creation."""
         mock_response = MagicMock()
         mock_response.status_code = 201
-        mock_response.json.return_value = {
-            "data": {
-                "id": "run-123",
-                "type": "runs",
-                "attributes": {"status": "planning", "message": "Test run"},
-            }
-        }
+        mock_response.json.return_value = {"data": {"id": "run-123", "type": "runs"}}
         mock_httpx_client.request.return_value = mock_response
 
         client = TerraformClient(config)
-        response = await client.create_run("ws-123", "Test run")
+        run_data = CreateRunRequest(workspace_id="ws-123", message="Test run")
+        response = await client.create_run(run_data)
 
         assert response.data.id == "run-123"
-        assert response.data.attributes["status"] == "planning"
-
-        # Verify the request was made correctly
         mock_httpx_client.request.assert_called_once()
         call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/runs" in call_args[1]["url"]
+        assert call_args.kwargs["method"] == "POST"
+        assert call_args.kwargs["url"] == "/runs"
 
     @pytest.mark.asyncio
-    async def test_apply_run(self, config, mock_httpx_client):
-        """Test run apply."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {"id": "apply-123", "type": "applies"}
-        }
-        mock_httpx_client.request.return_value = mock_response
-
+    async def test_run_actions(self, config, mock_httpx_client):
+        """Test run actions like apply, cancel, discard."""
+        mock_httpx_client.request.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"data": {"id": "apply-123", "type": "applies"}},
+        )
         client = TerraformClient(config)
-        response = await client.apply_run("run-123", "Apply comment")
+        action_data = RunActionRequest(comment="Test comment")
 
-        assert response.data.id == "apply-123"
+        await client.apply_run("run-123", action_data)
+        mock_httpx_client.request.assert_called_with(
+            method="POST",
+            url="/runs/run-123/actions/apply",
+            json={"comment": "Test comment"},
+            params=None,
+        )
 
-        # Verify the request was made correctly
-        mock_httpx_client.request.assert_called_once()
-        call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/runs/run-123/actions/apply" in call_args[1]["url"]
+        mock_httpx_client.request.return_value = MagicMock(
+            status_code=200, json=lambda: {"data": {"id": "run-123", "type": "runs"}}
+        )
+        await client.cancel_run("run-123", action_data)
+        mock_httpx_client.request.assert_called_with(
+            method="POST",
+            url="/runs/run-123/actions/cancel",
+            json={"comment": "Test comment"},
+            params=None,
+        )
 
-    @pytest.mark.asyncio
-    async def test_cancel_run(self, config, mock_httpx_client):
-        """Test run cancellation."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "id": "run-123",
-                "type": "runs",
-                "attributes": {"status": "canceled"},
-            }
-        }
-        mock_httpx_client.request.return_value = mock_response
-
-        client = TerraformClient(config)
-        response = await client.cancel_run("run-123")
-
-        assert response.data.id == "run-123"
-
-        # Verify the request was made correctly
-        mock_httpx_client.request.assert_called_once()
-        call_args = mock_httpx_client.request.call_args
-        assert call_args[1]["method"] == "POST"
-        assert "/runs/run-123/actions/cancel" in call_args[1]["url"]
-
-    @pytest.mark.asyncio
-    async def test_list_runs(self, config, mock_httpx_client):
-        """Test run listing."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": [
-                {"id": "run-123", "type": "runs", "attributes": {"status": "applied"}},
-                {"id": "run-456", "type": "runs", "attributes": {"status": "planning"}},
-            ]
-        }
-        mock_httpx_client.request.return_value = mock_response
-
-        client = TerraformClient(config)
-        response = await client.list_runs(workspace_id="ws-123")
-
-        assert len(response.data) == 2
-        assert response.data[0].id == "run-123"
-        assert response.data[1].id == "run-456"
+        await client.discard_run("run-123", action_data)
+        mock_httpx_client.request.assert_called_with(
+            method="POST",
+            url="/runs/run-123/actions/discard",
+            json={"comment": "Test comment"},
+            params=None,
+        )

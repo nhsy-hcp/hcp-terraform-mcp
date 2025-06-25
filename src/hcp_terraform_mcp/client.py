@@ -1,14 +1,22 @@
 """HCP Terraform API client."""
 
 import asyncio
-from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urljoin
+from typing import Any, Dict, List, Optional
 
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .config import TerraformConfig
-from .models import JsonApiError, JsonApiResponse
+from .models import (
+    CreateProjectRequest,
+    CreateRunRequest,
+    CreateWorkspaceRequest,
+    JsonApiError,
+    JsonApiResponse,
+    RunActionRequest,
+    UpdateProjectRequest,
+    UpdateWorkspaceRequest,
+)
 
 
 class TerraformApiError(Exception):
@@ -31,7 +39,7 @@ class RateLimiter:
     def __init__(self, max_requests: int = 30, window_seconds: int = 1):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests = []
+        self.requests: List[float] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self):
@@ -39,7 +47,6 @@ class RateLimiter:
         async with self._lock:
             while True:
                 now = asyncio.get_event_loop().time()
-                # Remove old requests outside the window
                 self.requests = [
                     req_time
                     for req_time in self.requests
@@ -50,10 +57,72 @@ class RateLimiter:
                     self.requests.append(now)
                     break
 
-                # Calculate sleep time
                 sleep_time = self.window_seconds - (now - self.requests[0])
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
+
+
+class Endpoints:
+    """Manages API endpoint URLs."""
+
+    def __init__(self, organization: str):
+        self.organization = organization
+
+    def organization_details(self) -> str:
+        """Endpoint for organization details."""
+        return f"/organizations/{self.organization}"
+
+    def projects(self) -> str:
+        """Endpoint for listing or creating projects."""
+        return f"/organizations/{self.organization}/projects"
+
+    def project(self, project_id: str) -> str:
+        """Endpoint for a specific project."""
+        return f"/projects/{project_id}"
+
+    def workspaces(self) -> str:
+        """Endpoint for listing or creating workspaces."""
+        return f"/organizations/{self.organization}/workspaces"
+
+    def workspace(self, workspace_id: str) -> str:
+        """Endpoint for a specific workspace."""
+        return f"/workspaces/{workspace_id}"
+
+    def lock_workspace(self, workspace_id: str) -> str:
+        """Endpoint for locking a workspace."""
+        return f"/workspaces/{workspace_id}/actions/lock"
+
+    def unlock_workspace(self, workspace_id: str) -> str:
+        """Endpoint for unlocking a workspace."""
+        return f"/workspaces/{workspace_id}/actions/unlock"
+
+    def runs(self) -> str:
+        """Endpoint for creating a run."""
+        return "/runs"
+
+    def organization_runs(self) -> str:
+        """Endpoint for listing organization-level runs."""
+        return f"/organizations/{self.organization}/runs"
+
+    def workspace_runs(self, workspace_id: str) -> str:
+        """Endpoint for listing workspace-level runs."""
+        return f"/workspaces/{workspace_id}/runs"
+
+    def run(self, run_id: str) -> str:
+        """Endpoint for a specific run."""
+        return f"/runs/{run_id}"
+
+    def apply_run(self, run_id: str) -> str:
+        """Endpoint for applying a run."""
+        return f"/runs/{run_id}/actions/apply"
+
+    def cancel_run(self, run_id: str) -> str:
+        """Endpoint for canceling a run."""
+        return f"/runs/{run_id}/actions/cancel"
+
+    def discard_run(self, run_id: str) -> str:
+        """Endpoint for discarding a run."""
+        return f"/runs/{run_id}/actions/discard"
 
 
 class TerraformClient:
@@ -62,6 +131,7 @@ class TerraformClient:
     def __init__(self, config: TerraformConfig):
         self.config = config
         self.rate_limiter = RateLimiter()
+        self.endpoints = Endpoints(config.organization)
         self._client = httpx.AsyncClient(
             base_url=config.base_url,
             headers={
@@ -82,6 +152,44 @@ class TerraformClient:
         """Close the HTTP client."""
         await self._client.aclose()
 
+    def _handle_api_error(
+        self, response: httpx.Response, api_response: JsonApiResponse
+    ):
+        """Construct and raise a TerraformApiError."""
+        error_message = f"API request failed with status {response.status_code}"
+        if api_response.errors:
+            error_details = "; ".join(
+                [
+                    f"{err.title}: {err.detail}"
+                    for err in api_response.errors
+                    if err.title and err.detail
+                ]
+            )
+            if error_details:
+                error_message += f": {error_details}"
+        raise TerraformApiError(
+            error_message, response.status_code, api_response.errors
+        )
+
+    def _handle_api_error(
+        self, response: httpx.Response, api_response: JsonApiResponse
+    ):
+        """Construct and raise a TerraformApiError."""
+        error_message = f"API request failed with status {response.status_code}"
+        if api_response.errors:
+            error_details = "; ".join(
+                [
+                    f"{err.title}: {err.detail}"
+                    for err in api_response.errors
+                    if err.title and err.detail
+                ]
+            )
+            if error_details:
+                error_message += f": {error_details}"
+        raise TerraformApiError(
+            error_message, response.status_code, api_response.errors
+        )
+
     async def _make_request(
         self,
         method: str,
@@ -91,44 +199,21 @@ class TerraformClient:
     ) -> JsonApiResponse:
         """Make an authenticated request to the Terraform API."""
         await self.rate_limiter.acquire()
-
         try:
             response = await self._client.request(
-                method=method,
-                url=endpoint,
-                json=data,
-                params=params,
+                method=method, url=endpoint, json=data, params=params
             )
-
-            # Parse response
             try:
-                response_data = response.json()
-                api_response = JsonApiResponse(**response_data)
+                api_response = JsonApiResponse(**response.json())
             except (ValueError, ValidationError) as e:
                 raise TerraformApiError(
                     f"Invalid JSON response: {e}", response.status_code
                 )
 
-            # Check for API errors
             if response.status_code >= 400:
-                error_message = f"API request failed with status {response.status_code}"
-                if api_response.errors:
-                    error_details = "; ".join(
-                        [
-                            f"{err.title}: {err.detail}"
-                            for err in api_response.errors
-                            if err.title and err.detail
-                        ]
-                    )
-                    if error_details:
-                        error_message += f": {error_details}"
-
-                raise TerraformApiError(
-                    error_message, response.status_code, api_response.errors
-                )
+                self._handle_api_error(response, api_response)
 
             return api_response
-
         except httpx.RequestError as e:
             raise TerraformApiError(f"Request failed: {e}")
 
@@ -154,56 +239,39 @@ class TerraformClient:
         """Make a DELETE request."""
         return await self._make_request("DELETE", endpoint)
 
-    # Organization endpoints
-    def get_organization_endpoint(self, path: str = "") -> str:
-        """Get organization-scoped endpoint."""
-        base = f"/organizations/{self.config.organization}"
-        return f"{base}/{path}".rstrip("/")
-
-    # Health check
     async def health_check(self) -> bool:
         """Check if the API is accessible."""
         try:
-            await self.get(self.get_organization_endpoint())
+            await self.get(self.endpoints.organization_details())
             return True
         except TerraformApiError:
             return False
 
+    def _build_payload(self, type_name: str, model: BaseModel) -> Dict[str, Any]:
+        """Build a JSON:API compliant payload from a Pydantic model."""
+        return {
+            "data": {
+                "type": type_name,
+                "attributes": model.model_dump(exclude_unset=True),
+            }
+        }
+
     # Project management methods
     async def create_project(
-        self, name: str, description: Optional[str] = None
+        self, project_data: CreateProjectRequest
     ) -> JsonApiResponse:
         """Create a new project in the organization."""
-        data = {"data": {"type": "projects", "attributes": {"name": name}}}
-
-        if description:
-            data["data"]["attributes"]["description"] = description
-
-        endpoint = self.get_organization_endpoint("projects")
-        return await self.post(endpoint, data)
+        payload = self._build_payload("projects", project_data)
+        return await self.post(self.endpoints.projects(), payload)
 
     async def update_project(
-        self,
-        project_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        self, project_id: str, project_data: UpdateProjectRequest
     ) -> JsonApiResponse:
         """Update an existing project."""
-        attributes = {}
-        if name:
-            attributes["name"] = name
-        if description:
-            attributes["description"] = description
-
-        if not attributes:
-            raise ValueError(
-                "At least one attribute (name or description) must be provided"
-            )
-
-        data = {"data": {"type": "projects", "attributes": attributes}}
-
-        endpoint = f"/projects/{project_id}"
-        return await self.patch(endpoint, data)
+        if not project_data.model_dump(exclude_unset=True):
+            raise ValueError("At least one attribute to update must be provided.")
+        payload = self._build_payload("projects", project_data)
+        return await self.patch(self.endpoints.project(project_id), payload)
 
     async def list_projects(
         self, include: Optional[str] = None, search: Optional[str] = None
@@ -213,74 +281,36 @@ class TerraformClient:
         if include:
             params["include"] = include
         if search:
-            params["search"] = search
-
-        endpoint = self.get_organization_endpoint("projects")
-        return await self.get(endpoint, params)
+            params["search[names]"] = search
+        return await self.get(self.endpoints.projects(), params)
 
     async def get_project(self, project_id: str) -> JsonApiResponse:
         """Get a specific project by ID."""
-        endpoint = f"/projects/{project_id}"
-        return await self.get(endpoint)
+        return await self.get(self.endpoints.project(project_id))
 
     # Workspace management methods
     async def create_workspace(
-        self,
-        name: str,
-        project_id: Optional[str] = None,
-        description: Optional[str] = None,
-        auto_apply: Optional[bool] = None,
-        execution_mode: Optional[str] = None,
-        terraform_version: Optional[str] = None,
-        working_directory: Optional[str] = None,
-        **kwargs,
+        self, workspace_data: CreateWorkspaceRequest
     ) -> JsonApiResponse:
         """Create a new workspace in the organization."""
-        attributes = {"name": name}
-
-        if description:
-            attributes["description"] = description
-        if auto_apply is not None:
-            attributes["auto-apply"] = auto_apply
-        if execution_mode:
-            attributes["execution-mode"] = execution_mode
-        if terraform_version:
-            attributes["terraform-version"] = terraform_version
-        if working_directory:
-            attributes["working-directory"] = working_directory
-
-        # Add any additional attributes from kwargs
-        for key, value in kwargs.items():
-            if value is not None:
-                attributes[key.replace("_", "-")] = value
-
-        data = {"data": {"type": "workspaces", "attributes": attributes}}
-
-        # Add project relationship if specified
-        if project_id:
-            data["data"]["relationships"] = {
-                "project": {"data": {"type": "projects", "id": project_id}}
+        attributes = workspace_data.model_dump(exclude_unset=True, by_alias=True)
+        payload = {"data": {"type": "workspaces", "attributes": attributes}}
+        if workspace_data.project_id:
+            payload["data"]["relationships"] = {
+                "project": {
+                    "data": {"type": "projects", "id": workspace_data.project_id}
+                }
             }
+        return await self.post(self.endpoints.workspaces(), payload)
 
-        endpoint = self.get_organization_endpoint("workspaces")
-        return await self.post(endpoint, data)
-
-    async def update_workspace(self, workspace_id: str, **kwargs) -> JsonApiResponse:
+    async def update_workspace(
+        self, workspace_id: str, workspace_data: UpdateWorkspaceRequest
+    ) -> JsonApiResponse:
         """Update an existing workspace."""
-        attributes = {}
-
-        # Convert snake_case to kebab-case for API
-        for key, value in kwargs.items():
-            if value is not None:
-                attributes[key.replace("_", "-")] = value
-
-        if not attributes:
-            raise ValueError("At least one attribute must be provided")
-
-        data = {"data": {"type": "workspaces", "attributes": attributes}}
-
-        endpoint = f"/workspaces/{workspace_id}"
-        return await self.patch(endpoint, data)
+        if not workspace_data.model_dump(exclude_unset=True):
+            raise ValueError("At least one attribute to update must be provided.")
+        payload = self._build_payload("workspaces", workspace_data)
+        return await self.patch(self.endpoints.workspace(workspace_id), payload)
 
     async def list_workspaces(
         self, include: Optional[str] = None, search: Optional[str] = None
@@ -290,70 +320,30 @@ class TerraformClient:
         if include:
             params["include"] = include
         if search:
-            params["search"] = search
-
-        endpoint = self.get_organization_endpoint("workspaces")
-        return await self.get(endpoint, params)
+            params["search[name]"] = search
+        return await self.get(self.endpoints.workspaces(), params)
 
     async def get_workspace(self, workspace_id: str) -> JsonApiResponse:
         """Get a specific workspace by ID."""
-        endpoint = f"/workspaces/{workspace_id}"
-        return await self.get(endpoint)
+        return await self.get(self.endpoints.workspace(workspace_id))
 
     async def lock_workspace(
         self, workspace_id: str, reason: Optional[str] = None
     ) -> JsonApiResponse:
         """Lock a workspace."""
-        data = {"data": {"type": "workspace-locks", "attributes": {}}}
-
-        if reason:
-            data["data"]["attributes"]["reason"] = reason
-
-        endpoint = f"/workspaces/{workspace_id}/actions/lock"
-        return await self.post(endpoint, data)
+        data = {"reason": reason} if reason else {}
+        return await self.post(self.endpoints.lock_workspace(workspace_id), data)
 
     async def unlock_workspace(self, workspace_id: str) -> JsonApiResponse:
         """Unlock a workspace."""
-        endpoint = f"/workspaces/{workspace_id}/actions/unlock"
-        return await self.post(endpoint, {})
+        return await self.post(self.endpoints.unlock_workspace(workspace_id), {})
 
     # Run management methods
-    async def create_run(
-        self,
-        workspace_id: str,
-        message: Optional[str] = None,
-        is_destroy: Optional[bool] = None,
-        refresh: Optional[bool] = None,
-        refresh_only: Optional[bool] = None,
-        replace_addrs: Optional[List[str]] = None,
-        target_addrs: Optional[List[str]] = None,
-        plan_only: Optional[bool] = None,
-        **kwargs,
-    ) -> JsonApiResponse:
+    async def create_run(self, run_data: CreateRunRequest) -> JsonApiResponse:
         """Create a new run for a workspace."""
-        attributes = {}
-
-        if message:
-            attributes["message"] = message
-        if is_destroy is not None:
-            attributes["is-destroy"] = is_destroy
-        if refresh is not None:
-            attributes["refresh"] = refresh
-        if refresh_only is not None:
-            attributes["refresh-only"] = refresh_only
-        if replace_addrs:
-            attributes["replace-addrs"] = replace_addrs
-        if target_addrs:
-            attributes["target-addrs"] = target_addrs
-        if plan_only is not None:
-            attributes["plan-only"] = plan_only
-
-        # Add any additional attributes from kwargs
-        for key, value in kwargs.items():
-            if value is not None:
-                attributes[key.replace("_", "-")] = value
-
-        data = {
+        attributes = run_data.model_dump(exclude_unset=True, by_alias=True)
+        workspace_id = attributes.pop("workspace_id")
+        payload = {
             "data": {
                 "type": "runs",
                 "attributes": attributes,
@@ -362,45 +352,28 @@ class TerraformClient:
                 },
             }
         }
-
-        endpoint = "/runs"
-        return await self.post(endpoint, data)
+        return await self.post(self.endpoints.runs(), payload)
 
     async def apply_run(
-        self, run_id: str, comment: Optional[str] = None
+        self, run_id: str, action_data: RunActionRequest
     ) -> JsonApiResponse:
         """Apply a run."""
-        data = {"data": {"type": "applies", "attributes": {}}}
-
-        if comment:
-            data["data"]["attributes"]["comment"] = comment
-
-        endpoint = f"/runs/{run_id}/actions/apply"
-        return await self.post(endpoint, data)
+        payload = {"comment": action_data.comment} if action_data.comment else {}
+        return await self.post(self.endpoints.apply_run(run_id), payload)
 
     async def cancel_run(
-        self, run_id: str, comment: Optional[str] = None
+        self, run_id: str, action_data: RunActionRequest
     ) -> JsonApiResponse:
         """Cancel a run."""
-        data = {"data": {"type": "runs", "attributes": {}}}
-
-        if comment:
-            data["data"]["attributes"]["comment"] = comment
-
-        endpoint = f"/runs/{run_id}/actions/cancel"
-        return await self.post(endpoint, data)
+        payload = {"comment": action_data.comment} if action_data.comment else {}
+        return await self.post(self.endpoints.cancel_run(run_id), payload)
 
     async def discard_run(
-        self, run_id: str, comment: Optional[str] = None
+        self, run_id: str, action_data: RunActionRequest
     ) -> JsonApiResponse:
         """Discard a run."""
-        data = {"data": {"type": "runs", "attributes": {}}}
-
-        if comment:
-            data["data"]["attributes"]["comment"] = comment
-
-        endpoint = f"/runs/{run_id}/actions/discard"
-        return await self.post(endpoint, data)
+        payload = {"comment": action_data.comment} if action_data.comment else {}
+        return await self.post(self.endpoints.discard_run(run_id), payload)
 
     async def list_runs(
         self,
@@ -417,17 +390,15 @@ class TerraformClient:
             params["search"] = search
 
         if organization_runs:
-            endpoint = self.get_organization_endpoint("runs")
+            endpoint = self.endpoints.organization_runs()
         elif workspace_id:
-            endpoint = f"/workspaces/{workspace_id}/runs"
+            endpoint = self.endpoints.workspace_runs(workspace_id)
         else:
             raise ValueError(
                 "Either workspace_id must be provided or organization_runs must be True"
             )
-
         return await self.get(endpoint, params)
 
     async def get_run(self, run_id: str) -> JsonApiResponse:
         """Get a specific run by ID."""
-        endpoint = f"/runs/{run_id}"
-        return await self.get(endpoint)
+        return await self.get(self.endpoints.run(run_id))

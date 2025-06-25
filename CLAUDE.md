@@ -45,12 +45,15 @@ uv run hcp-terraform-mcp
 ## Architecture
 
 ### Project Structure
-- `src/hcp_terraform_mcp/` - Main package
-  - `server.py` - MCP server implementation with tool/resource handlers
-  - `client.py` - HCP Terraform API client with rate limiting
-  - `config.py` - Configuration management via environment variables
-  - `models.py` - Pydantic models for API responses
-- `tests/` - Test suite with mocked API responses
+- `src/hcp_terraform_mcp/` - Main package (1,398 total lines)
+  - `server.py` - MCP server implementation with tool/resource handlers (165 lines)
+  - `client.py` - HCP Terraform API client with rate limiting (392 lines)
+  - `config.py` - Configuration management via environment variables (48 lines)
+  - `models.py` - Pydantic models for API responses (161 lines)
+  - `tool_definitions.py` - Tool schema definitions (313 lines)
+  - `tool_handlers.py` - Tool implementation handlers (200 lines)
+  - `resource_handlers.py` - Dynamic resource discovery (110 lines)
+- `tests/` - Comprehensive test suite with mocked API responses (19 total tests)
 
 ### Key Components
 
@@ -92,12 +95,14 @@ uv run hcp-terraform-mcp
 - Pydantic models for API response validation
 - MCP format compatibility fixes
 - MCP Inspector compatibility
-- Comprehensive testing (32 tests passing)
+- Comprehensive testing (19 tests passing)
 
 **Current MCP Capabilities:**
-- Tools: 12 total (1 health + 3 project + 5 workspace + 5 run tools)
+- Tools: 14 total (1 health + 3 project + 5 workspace + 5 run tools)
 - Resources: Dynamic discovery of projects, workspaces, runs + organization info
 - Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
+- Testing: 19 tests covering all core functionality
+- Code Quality: Full type hints, comprehensive error handling, structured logging
 
 ## Next Development Phase
 

@@ -1,16 +1,11 @@
 """Configuration management for HCP Terraform MCP Server."""
 
-import os
-from typing import Optional
-
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ConfigurationError(Exception):
     """Configuration validation error."""
-
-    pass
 
 
 class TerraformConfig(BaseSettings):
@@ -38,26 +33,6 @@ def get_config() -> TerraformConfig:
         return TerraformConfig()
     except ValidationError as e:
         raise ConfigurationError(f"Configuration validation failed: {e}")
-
-
-def validate_environment() -> None:
-    """Validate required environment variables are set."""
-    required_vars = {
-        "TFC_API_TOKEN": "HCP Terraform API token is required",
-        "TFC_ORGANIZATION": "HCP Terraform organization name is required",
-    }
-
-    missing_vars = []
-    for var, description in required_vars.items():
-        if not os.getenv(var):
-            missing_vars.append(f"- {var}: {description}")
-
-    if missing_vars:
-        error_msg = "Missing required environment variables:\n" + "\n".join(
-            missing_vars
-        )
-        error_msg += "\n\nPlease set these variables in your environment or .env file."
-        raise ConfigurationError(error_msg)
 
 
 def get_config_summary() -> dict:

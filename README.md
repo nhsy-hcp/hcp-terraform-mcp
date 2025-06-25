@@ -2,12 +2,13 @@
 
 A Model Context Protocol (MCP) server that provides AI agents with standardized access to HCP Terraform APIs for managing projects, workspaces, and runs.
 
-## Phase 1 - Foundation
+## Project Status - Phase 3 Complete ✅
 
-This phase implements the basic project structure, authentication, and API client foundation.
+All three implementation phases have been completed, providing a full-featured MCP server for HCP Terraform management.
 
 ### Completed Features
 
+**Phase 1 - Foundation:**
 - Python project initialization with uv package manager
 - MCP Python SDK and HTTP client dependencies
 - Development environment and testing framework setup
@@ -18,23 +19,45 @@ This phase implements the basic project structure, authentication, and API clien
 - Configuration management via environment variables
 - Basic test suite
 
+**Phase 2 - Core Operations:**
+- Project management (CRUD operations)
+- Workspace management (create, update, lock/unlock)
+- Run management (create, apply, cancel runs)
+- Full API client implementation
+- Comprehensive error handling and validation
+
+**Phase 3 - Advanced Features:**
+- Enhanced resource handlers with dynamic discovery
+- 5-minute TTL caching for performance optimization
+- 4 comprehensive prompt templates
+- Environment validation with clear error messages
+- Pydantic models for API response validation
+- MCP format compatibility fixes
+- MCP Inspector compatibility
+- Comprehensive testing suite (19 tests passing)
+
 ### Project Structure
 
 ```
 hcp-terraform-mcp/
   src/hcp_terraform_mcp/
     __init__.py
-    __main__.py          # Main entry point
-    server.py            # MCP server implementation
-    client.py            # HCP Terraform API client
-    config.py            # Configuration management
-    models.py            # Pydantic models for API responses
+    __main__.py               # Main entry point
+    server.py                 # MCP server implementation (165 lines)
+    client.py                 # HCP Terraform API client (392 lines)
+    config.py                 # Configuration management (48 lines)
+    models.py                 # Pydantic models for API responses (161 lines)
+    tool_definitions.py       # Tool definitions (313 lines)
+    tool_handlers.py          # Tool implementation handlers (200 lines)
+    resource_handlers.py      # Resource discovery handlers (110 lines)
   tests/
-    test_client.py       # Client tests
-  .env.example           # Environment variables template
-  pytest.ini             # Test configuration
-  project-plan.md        # Implementation plan
-  pyproject.toml         # Project dependencies
+    test_client.py            # Client tests (14 tests)
+    test_server.py            # Server tests (5 tests)
+  .env.example              # Environment variables template
+  pytest.ini                # Test configuration
+  project-plan.md           # Implementation plan
+  pyproject.toml            # Project dependencies
+  CLAUDE.md                 # Claude Code guidance
 ```
 
 ## Setup
@@ -76,20 +99,48 @@ hcp-terraform-mcp/
 
 Set these environment variables in your `.env` file:
 
-- `TFC_API_TOKEN`: Your HCP Terraform API token
-- `TFC_ORGANIZATION`: Your organization name
+- `TFC_API_TOKEN`: Your HCP Terraform API token (required)
+- `TFC_ORGANIZATION`: Your organization name (required)
 - `TFC_BASE_URL`: API base URL (default: https://app.terraform.io/api/v2)
+- `TFC_ENABLE_CACHING`: Enable 5-minute response caching (default: true)
+- `TFC_DEBUG_MODE`: Enable debug logging (default: false)
 
 ## Current MCP Capabilities
 
-### Tools
+### Tools (14 total)
+**Health & Connectivity:**
 - `health_check` - Check HCP Terraform API connectivity
 
-### Resources
-- `terraform://organization/info` - Organization information
+**Project Management:**
+- `create_project` - Create a new HCP Terraform project
+- `list_projects` - List all projects in the organization
+- `delete_project` - Delete a project by ID
 
-### Prompts
-- `terraform_status` - Get organization status template
+**Workspace Management:**
+- `create_workspace` - Create a new workspace
+- `list_workspaces` - List workspaces (with optional project filtering)
+- `update_workspace` - Update workspace settings
+- `lock_workspace` - Lock a workspace to prevent changes
+- `unlock_workspace` - Unlock a workspace
+
+**Run Management:**
+- `create_run` - Create and execute a new run
+- `list_runs` - List runs for a workspace
+- `get_run` - Get detailed information about a specific run
+- `apply_run` - Apply a planned run
+- `cancel_run` - Cancel a running operation
+
+### Resources
+- `terraform://organization/info` - Organization details and metadata
+- `terraform://projects/` - Dynamic discovery of all projects
+- `terraform://workspaces/` - Dynamic discovery of all workspaces
+- `terraform://runs/` - Dynamic discovery of recent runs
+
+### Prompts (4 comprehensive templates)
+- `terraform_status` - Organization and infrastructure status overview
+- `terraform_deployment` - Deployment planning and execution guidance
+- `workspace_setup` - Workspace configuration and management
+- `run_monitoring` - Run execution monitoring and troubleshooting
 
 ## Adding to Claude Code
 
@@ -161,11 +212,31 @@ claude mcp get hcp-terraform
 
 ### Usage in Claude Code
 
-Once added, you can use the server's capabilities in Claude Code:
+Once added, you can use the server's comprehensive capabilities in Claude Code:
 
-- **Health Check**: Test API connectivity
-- **Organization Info**: Get details about your HCP Terraform organization
-- **Status Templates**: Use prompts for infrastructure status checks
+**Project Management:**
+- Create, list, and delete projects
+- Organize workspaces within projects
+
+**Workspace Operations:**
+- Create and configure workspaces
+- Update workspace settings and variables
+- Lock/unlock workspaces for maintenance
+
+**Infrastructure Deployment:**
+- Create and execute runs
+- Monitor run progress and logs
+- Apply planned changes
+- Cancel running operations
+
+**Resource Discovery:**
+- Browse all projects, workspaces, and runs
+- Get detailed information about infrastructure state
+
+**Guided Workflows:**
+- Use prompt templates for common scenarios
+- Get assistance with deployment planning
+- Monitor infrastructure health
 
 ### Troubleshooting
 
@@ -190,6 +261,21 @@ If you need to remove the server:
 claude mcp remove hcp-terraform
 ```
 
-## Next Phase
+## Next Development Phase
 
-Phase 2 will implement the core project, workspace, and run management tools. See `project-plan.md` for the complete implementation roadmap.
+Phase 4 (Future) - API Explorer Integration:
+- Advanced analytics and query capabilities
+- Organization-wide data exploration
+- Infrastructure audit and compliance tools
+- Custom reporting and metrics
+
+See `implementation-plan.md` for the complete development roadmap.
+
+## Technical Specifications
+
+- **Language**: Python 3.11+
+- **Framework**: MCP (Model Context Protocol) Python SDK
+- **API Client**: HTTP client with rate limiting (30 req/sec)
+- **Caching**: 5-minute TTL for performance optimization
+- **Testing**: 19 comprehensive tests with mocked API responses
+- **Code Quality**: Type hints, error handling, and logging throughout

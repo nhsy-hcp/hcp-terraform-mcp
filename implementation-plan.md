@@ -249,20 +249,6 @@ This plan provides a production-ready MCP server that enables AI agents to effec
 - Resources: Dynamic discovery of projects, workspaces, runs + organization info
 - Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
 
-### ✅ Phase 3.1: Debug & Stability Improvements - COMPLETED
-**Recent Enhancements (December 2024):**
-- **Debug Logging System:** Added comprehensive debug logging with TFC_DEBUG_MODE environment variable
-  - Request/response logging for API calls
-  - Cache hit/miss tracking
-  - Resource handler operation logging
-  - Safe credential logging (obfuscated tokens)
-- **MCP Resource Reading Bug Fix:** Resolved `'TextResourceContents' object has no attribute 'content'` error
-  - Updated all read_resource return statements to use ReadResourceResult wrapper
-  - Fixed cache return handling to maintain MCP compliance
-  - Enhanced error handling for resource operations
-- **Code Quality Improvements:** Enhanced error messages and validation
-- **Testing Updates:** Maintained 32 comprehensive tests (all passing)
-
 **Configuration Enhancements:**
 ```bash
 # New debug configuration option

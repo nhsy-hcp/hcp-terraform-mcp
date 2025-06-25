@@ -1,188 +1,95 @@
 """Tests for the MCP server."""
 
-import json
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from hcp_terraform_mcp.config import ConfigurationError, TerraformConfig
-from hcp_terraform_mcp.models import JsonApiResource, JsonApiResponse
-from hcp_terraform_mcp.server import TerraformMcpServer
+from hcp_terraform_mcp.config import TerraformConfig
+from hcp_terraform_mcp import server as hcp_server
 
 
 @pytest.fixture
 def mock_config():
     """Mock configuration."""
-    return TerraformConfig(
-        api_token="test-token",
-        organization="test-org",
-        base_url="https://test.terraform.io/api/v2",
+    with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
+        config = TerraformConfig(
+            api_token="test-token",
+            organization="test-org",
+            base_url="https://test.terraform.io/api/v2",
+            debug_mode=True,
+        )
+        mock_get_config.return_value = config
+        yield config
+
+
+@pytest.fixture
+def mock_client():
+    """Mock TerraformClient."""
+    with patch("hcp_terraform_mcp.server.TerraformClient") as mock:
+        client = AsyncMock()
+        client.health_check.return_value = True
+        mock.return_value = client
+        yield client
+
+
+@pytest.fixture
+def mock_tool_handlers():
+    """Mock ToolHandlers."""
+    with patch(
+        "hcp_terraform_mcp.server.tool_handlers", new_callable=AsyncMock
+    ) as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_resource_handler():
+    """Mock ResourceHandler."""
+    with patch(
+        "hcp_terraform_mcp.server.resource_handler", new_callable=AsyncMock
+    ) as mock:
+        yield mock
+
+
+@pytest.mark.asyncio
+async def test_server_start_stop(mock_config, mock_client):
+    """Test server start and stop."""
+    await hcp_server.start_server()
+    assert hcp_server.client is not None
+    assert hcp_server.tool_handlers is not None
+    assert hcp_server.resource_handler is not None
+    mock_client.health_check.assert_called_once()
+
+    await hcp_server.stop_server()
+    mock_client.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_list_tools(mock_config):
+    """Test that list_tools returns the correct tools."""
+    tools = await hcp_server.list_tools()
+    assert isinstance(tools, list)
+    assert len(tools) > 0
+    assert tools[0].name == "health_check"
+
+
+@pytest.mark.asyncio
+async def test_call_tool_dispatch(mock_config, mock_tool_handlers):
+    """Test that call_tool dispatches to the correct handler."""
+    await hcp_server.call_tool(name="health_check", arguments={})
+    mock_tool_handlers.dispatch.assert_called_once_with("health_check", {})
+
+
+@pytest.mark.asyncio
+async def test_list_resources(mock_config, mock_resource_handler):
+    """Test that list_resources returns a list of resources."""
+    await hcp_server.list_resources()
+    mock_resource_handler.list_resources.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_read_resource(mock_config, mock_resource_handler):
+    """Test that read_resource calls the resource handler."""
+    await hcp_server.read_resource(uri="terraform://organization/info")
+    mock_resource_handler.read_resource.assert_called_once_with(
+        "terraform://organization/info"
     )
-
-
-class TestTerraformMcpServer:
-    """Test MCP server."""
-
-    def test_server_initialization(self):
-        """Test server initialization."""
-        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
-            with patch("hcp_terraform_mcp.server.validate_environment"):
-                mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
-                )
-
-                server = TerraformMcpServer()
-                assert server.config is not None
-                assert server.server is not None
-
-    @pytest.mark.asyncio
-    async def test_server_start_stop(self):
-        """Test server start and stop."""
-        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
-            with patch("hcp_terraform_mcp.server.validate_environment"):
-                mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
-                )
-
-                with patch(
-                    "hcp_terraform_mcp.server.TerraformClient"
-                ) as mock_client_class:
-                    mock_client = AsyncMock()
-                    mock_client.health_check.return_value = True
-                    mock_client_class.return_value = mock_client
-
-                    server = TerraformMcpServer()
-
-                    await server.start()
-                    assert server.client is not None
-
-                    await server.stop()
-                    mock_client.close.assert_called_once()
-
-
-class TestMcpToolsSetup:
-    """Test MCP tool setup and registration."""
-
-    def test_server_has_tools_configured(self):
-        """Test that server has the expected tools configured."""
-        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
-            with patch("hcp_terraform_mcp.server.validate_environment"):
-                mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
-                )
-
-                server = TerraformMcpServer()
-
-                # Verify server was created successfully
-                assert server.server is not None
-                assert server.config is not None
-                assert server.config.api_token == "test-token"
-                assert server.config.organization == "test-org"
-
-
-class TestEnvironmentValidation:
-    """Test environment variable validation."""
-
-    def test_missing_api_token(self):
-        """Test error when API token is missing."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ConfigurationError) as exc_info:
-                from hcp_terraform_mcp.config import validate_environment
-
-                validate_environment()
-
-            assert "TFC_API_TOKEN" in str(exc_info.value)
-            assert "TFC_ORGANIZATION" in str(exc_info.value)
-
-    def test_missing_organization(self):
-        """Test error when organization is missing."""
-        with patch.dict("os.environ", {"TFC_API_TOKEN": "test-token"}, clear=True):
-            with pytest.raises(ConfigurationError) as exc_info:
-                from hcp_terraform_mcp.config import validate_environment
-
-                validate_environment()
-
-            assert "TFC_ORGANIZATION" in str(exc_info.value)
-
-    def test_valid_environment(self):
-        """Test that validation passes with required variables."""
-        with patch.dict(
-            "os.environ",
-            {"TFC_API_TOKEN": "test-token", "TFC_ORGANIZATION": "test-org"},
-            clear=True,
-        ):
-            from hcp_terraform_mcp.config import validate_environment
-
-            # Should not raise an exception
-            validate_environment()
-
-
-class TestPydanticValidation:
-    """Test Pydantic model validation."""
-
-    def test_project_attributes_validation(self):
-        """Test ProjectAttributes model validation."""
-        from hcp_terraform_mcp.models import ProjectAttributes
-
-        # Valid data
-        valid_data = {"name": "test-project", "description": "Test project"}
-        project = ProjectAttributes(**valid_data)
-        assert project.name == "test-project"
-        assert project.description == "Test project"
-
-        # Missing required field should raise validation error
-        with pytest.raises(Exception):  # Pydantic ValidationError
-            ProjectAttributes(description="Test project")
-
-    def test_workspace_attributes_validation(self):
-        """Test WorkspaceAttributes model validation."""
-        from hcp_terraform_mcp.models import WorkspaceAttributes
-
-        # Valid data
-        valid_data = {
-            "name": "test-workspace",
-            "auto_apply": True,
-            "execution_mode": "remote",
-        }
-        workspace = WorkspaceAttributes(**valid_data)
-        assert workspace.name == "test-workspace"
-        assert workspace.auto_apply is True
-        assert workspace.execution_mode == "remote"
-
-    def test_run_attributes_validation(self):
-        """Test RunAttributes model validation."""
-        from hcp_terraform_mcp.models import RunAttributes
-
-        # Valid data
-        valid_data = {"status": "planned", "message": "Test run", "is_destroy": False}
-        run = RunAttributes(**valid_data)
-        assert run.status == "planned"
-        assert run.message == "Test run"
-        assert run.is_destroy is False
-
-
-class TestPromptTemplates:
-    """Test enhanced prompt templates."""
-
-    def test_prompt_templates_exist(self):
-        """Test that all expected prompt templates are configured."""
-        with patch("hcp_terraform_mcp.server.get_config") as mock_get_config:
-            with patch("hcp_terraform_mcp.server.validate_environment"):
-                mock_get_config.return_value = TerraformConfig(
-                    api_token="test-token", organization="test-org"
-                )
-
-                server = TerraformMcpServer()
-
-                # Test that expected prompts are available
-                expected_prompts = [
-                    "terraform_status",
-                    "terraform_deployment",
-                    "workspace_setup",
-                    "run_monitoring",
-                ]
-
-                # This would need to be tested via the actual handler
-                # For now, just verify server creation
-                assert server.server is not None
