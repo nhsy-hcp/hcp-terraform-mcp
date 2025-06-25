@@ -1,5 +1,7 @@
 # HCP Terraform MCP Server
 
+[![Test](https://github.com/nhsy-hcp/hcp-terraform-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/nhsy-hcp/hcp-terraform-mcp/actions/workflows/test.yml)
+
 A Model Context Protocol (MCP) server that provides AI agents with standardized access to HCP Terraform APIs for managing projects, workspaces, and runs.
 
 ## Project Status - Phase 3 Complete ✅
