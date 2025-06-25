@@ -156,11 +156,15 @@ Build a Python MCP (Model Context Protocol) server that provides AI agents with 
 - `pytest` - Testing framework
 
 ### Configuration
-```python
-# Environment variables
+```bash
+# Required environment variables
 TFC_API_TOKEN=<your-token>
 TFC_ORGANIZATION=<org-name>
 TFC_BASE_URL=https://app.terraform.io/api/v2
+
+# Optional configuration
+TFC_ENABLE_CACHING=true   # Enable 5-minute TTL resource caching
+TFC_DEBUG_MODE=true       # Enable detailed debug logging
 ```
 
 ### Error Handling
@@ -236,12 +240,34 @@ This plan provides a production-ready MCP server that enables AI agents to effec
 - **Environment Validation:** Robust validation with clear error messages
 - **Pydantic Models:** Data validation for API responses with graceful fallback
 - **MCP Format Compatibility:** All handlers now compatible with MCP Inspector
-- **Comprehensive Testing:** 14 tests covering all new functionality
+- **Comprehensive Testing:** 32 tests covering all functionality (all passing)
+- **Debug Logging Feature:** Enhanced logging with TFC_DEBUG_MODE environment variable
+- **MCP Resource Reading Fix:** Updated read_resource handler to return proper ReadResourceResult objects
 
 **Current MCP Capabilities:**
 - Tools: 12 total (1 health + 3 project + 5 workspace + 5 run tools)
 - Resources: Dynamic discovery of projects, workspaces, runs + organization info
 - Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
+
+### ✅ Phase 3.1: Debug & Stability Improvements - COMPLETED
+**Recent Enhancements (December 2024):**
+- **Debug Logging System:** Added comprehensive debug logging with TFC_DEBUG_MODE environment variable
+  - Request/response logging for API calls
+  - Cache hit/miss tracking
+  - Resource handler operation logging
+  - Safe credential logging (obfuscated tokens)
+- **MCP Resource Reading Bug Fix:** Resolved `'TextResourceContents' object has no attribute 'content'` error
+  - Updated all read_resource return statements to use ReadResourceResult wrapper
+  - Fixed cache return handling to maintain MCP compliance
+  - Enhanced error handling for resource operations
+- **Code Quality Improvements:** Enhanced error messages and validation
+- **Testing Updates:** Maintained 32 comprehensive tests (all passing)
+
+**Configuration Enhancements:**
+```bash
+# New debug configuration option
+TFC_DEBUG_MODE=true  # Enables detailed operation logging
+```
 
 ### 🔄 Next: Phase 4 - API Explorer Integration
 Ready to implement advanced analytics and query capabilities.
