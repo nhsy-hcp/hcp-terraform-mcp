@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from hcp_terraform_mcp.client import RateLimiter, TerraformApiError, TerraformClient
-from hcp_terraform_mcp.config import TerraformConfig
-from hcp_terraform_mcp.models import (
+from src.hcp_terraform_mcp.client import RateLimiter, TerraformApiError, TerraformClient
+from src.hcp_terraform_mcp.config import TerraformConfig
+from src.hcp_terraform_mcp.models import (
     CreateProjectRequest,
     CreateRunRequest,
     CreateWorkspaceRequest,
@@ -29,7 +29,7 @@ def config():
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx.AsyncClient."""
-    with patch("hcp_terraform_mcp.client.httpx.AsyncClient") as mock:
+    with patch("src.hcp_terraform_mcp.client.httpx.AsyncClient") as mock:
         client = AsyncMock()
         mock.return_value = client
         yield client

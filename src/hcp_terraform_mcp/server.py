@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp.types import GetPromptResult, Prompt, PromptMessage, TextContent
 
 from .client import TerraformApiError, TerraformClient
@@ -143,6 +144,71 @@ async def stop_server():
     logger.info("HCP Terraform MCP Server stopped")
 
 
+async def run_http_server():
+    """Run the MCP server with Streamable HTTP transport."""
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    from starlette.responses import Response
+    import uvicorn
+
+    # Initialize the server first
+    await start_server()
+
+    # Create HTTP transport
+    http_transport = StreamableHTTPServerTransport("hcp-terraform-mcp-session")
+
+    # Use the transport as ASGI app directly
+    def mcp_app(scope, receive, send):
+        return http_transport.handle_request(scope, receive, send)
+
+    async def handle_health(request):
+        """Health check endpoint."""
+        return Response("OK", media_type="text/plain")
+
+    # Create Starlette app
+    from starlette.routing import Mount
+
+    app = Starlette(
+        routes=[
+            Mount("/mcp", mcp_app),
+            Route("/health", handle_health),
+        ]
+    )
+
+    # Start uvicorn server
+    config_uvicorn = uvicorn.Config(
+        app=app,
+        host="localhost",
+        port=3000,
+        log_level="info" if not config.debug_mode else "debug",
+    )
+
+    server_uvicorn = uvicorn.Server(config_uvicorn)
+    logger.info("Starting Streamable HTTP server on http://localhost:3000")
+    logger.info("MCP endpoint: http://localhost:3000/mcp")
+    logger.info("Health check: http://localhost:3000/health")
+
+    # Run the MCP server with the HTTP transport
+    async def run_mcp_server():
+        async with http_transport.connect() as streams:
+            read_stream, write_stream = streams
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options(),
+            )
+
+    try:
+        # Start both the HTTP server and MCP server concurrently
+        import anyio
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(server_uvicorn.serve)
+            tg.start_soon(run_mcp_server)
+    finally:
+        await stop_server()
+
+
 def main():
     """Main entry point."""
     logging.basicConfig(
@@ -151,16 +217,20 @@ def main():
     )
 
     async def run():
-        async with stdio_server() as streams:
-            await start_server()
-            try:
-                await server.run(
-                    streams[0],
-                    streams[1],
-                    server.create_initialization_options(),
-                )
-            finally:
-                await stop_server()
+        if config.debug_mode:
+            logger.info("Debug mode enabled - starting Streamable HTTP server")
+            await run_http_server()
+        else:
+            async with stdio_server() as streams:
+                await start_server()
+                try:
+                    await server.run(
+                        streams[0],
+                        streams[1],
+                        server.create_initialization_options(),
+                    )
+                finally:
+                    await stop_server()
 
     asyncio.run(run())
 

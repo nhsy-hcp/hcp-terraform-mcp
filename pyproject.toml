@@ -9,10 +9,16 @@ dependencies = [
     "mcp>=1.9.4",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
+    "starlette>=0.37.2",
+    "uvicorn>=0.31.0",
+    "anyio>=4.9.0",
 ]
 
 [project.scripts]
 hcp-terraform-mcp = "hcp_terraform_mcp.server:main"
+
+[tool.uv]
+package = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

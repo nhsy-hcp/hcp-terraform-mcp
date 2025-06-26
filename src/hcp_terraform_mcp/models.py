@@ -286,3 +286,71 @@ class RunActionRequest(BaseModel):
     """Request model for run actions (apply, cancel, discard)."""
 
     comment: Optional[str] = Field(None, description="A comment for the action.")
+
+
+# Read Resource Response Models
+class BaseResourceData(BaseModel):
+    """Base model for resource read responses."""
+
+    id: str = Field(..., description="The resource's unique identifier.")
+    type: str = Field(..., description="The resource's type.")
+    retrieved_at: datetime = Field(..., description="When the resource was retrieved.")
+
+
+class OrganizationResourceData(BaseResourceData):
+    """Organization resource data for read operations."""
+
+    name: str = Field(..., description="The organization name.")
+    api_url: str = Field(..., description="The API URL for the organization.")
+    status: str = Field(..., description="Connection status.")
+    attributes: Dict[str, Any] = Field(
+        default_factory=dict, description="Organization attributes."
+    )
+
+
+class ProjectResourceData(BaseResourceData):
+    """Project resource data for read operations."""
+
+    attributes: ProjectAttributes = Field(..., description="Project attributes.")
+    relationships: Optional[Dict[str, Any]] = Field(
+        None, description="Project relationships."
+    )
+    workspace_count: Optional[int] = Field(
+        None, description="Number of workspaces in the project."
+    )
+
+
+class WorkspaceResourceData(BaseResourceData):
+    """Workspace resource data for read operations."""
+
+    attributes: WorkspaceAttributes = Field(..., description="Workspace attributes.")
+    relationships: Optional[Dict[str, Any]] = Field(
+        None, description="Workspace relationships."
+    )
+    latest_run_id: Optional[str] = Field(None, description="ID of the latest run.")
+
+
+class RunResourceData(BaseResourceData):
+    """Run resource data for read operations."""
+
+    attributes: RunAttributes = Field(..., description="Run attributes.")
+    relationships: Optional[Dict[str, Any]] = Field(
+        None, description="Run relationships."
+    )
+    workspace_name: Optional[str] = Field(
+        None, description="Name of the associated workspace."
+    )
+
+
+class ResourceListData(BaseModel):
+    """Resource list data for read operations."""
+
+    type: str = Field(..., description="The resource list type.")
+    count: int = Field(..., description="Total number of resources.")
+    retrieved_at: datetime = Field(..., description="When the list was retrieved.")
+    resources: List[Dict[str, Any]] = Field(
+        default_factory=list, description="List of resources."
+    )
+    pagination: Optional[Dict[str, Any]] = Field(
+        None, description="Pagination information."
+    )

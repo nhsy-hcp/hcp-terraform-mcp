@@ -35,11 +35,23 @@ uv run pytest --cov=src/hcp_terraform_mcp
 
 ### Running the Server
 ```bash
-# Run MCP server
+# Run MCP server (stdio mode)
 uv run python -m hcp_terraform_mcp
+
+# Run MCP server in debug mode with Streamable HTTP transport (http://localhost:3000)
+TFC_DEBUG_MODE=true uv run python -m hcp_terraform_mcp
 
 # Or use the installed script
 uv run hcp-terraform-mcp
+```
+
+### Debug Mode with MCP Inspector
+```bash
+# Start server in debug mode
+TFC_DEBUG_MODE=true uv run python -m hcp_terraform_mcp
+
+# In another terminal, run MCP Inspector with Streamable HTTP transport
+npx @modelcontextprotocol/inspector http://localhost:3000/mcp
 ```
 
 ## Architecture
@@ -101,7 +113,9 @@ uv run hcp-terraform-mcp
 - Tools: 14 total (1 health + 3 project + 5 workspace + 5 run tools)
 - Resources: Dynamic discovery of projects, workspaces, runs + organization info
 - Prompts: 4 comprehensive templates (terraform_status, terraform_deployment, workspace_setup, run_monitoring)
-- Testing: 19 tests covering all core functionality
+- Transport: Dual mode support (stdio for production, Streamable HTTP for debug/development)
+- Debug Mode: Full Streamable HTTP server with MCP Inspector compatibility
+- Testing: 36 tests covering all functionality including Streamable HTTP transport
 - Code Quality: Full type hints, comprehensive error handling, structured logging
 
 ## Next Development Phase
